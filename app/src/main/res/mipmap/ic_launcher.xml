@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Запасная иконка для Android младше 8.0, где адаптивная из mipmap-anydpi-v26 не применяется.
+  Здесь фон и рисунок собраны в один файл, а рисунок увеличен: без маски адаптивной
+  иконки безопасная зона не обрезается, и в исходном масштабе он смотрелся бы мелким.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path android:fillColor="#FBEFC6"
+        android:pathData="M24,2 H84 A22,22 0 0,1 106,24 V84 A22,22 0 0,1 84,106 H24 A22,22 0 0,1 2,84 V24 A22,22 0 0,1 24,2 Z" />
+
+    <group android:scaleX="1.3" android:scaleY="1.3" android:pivotX="54" android:pivotY="54">
+        <path android:fillColor="#FFF8EE" android:strokeColor="#6B5B73" android:strokeWidth="2.8"
+            android:strokeLineJoin="round"
+            android:pathData="M31,41 L77,41 L77,71 Q77,77 71,77 L37,77 Q31,77 31,71 Z" />
+        <path android:fillColor="#A8D8EA" android:strokeColor="#6B5B73" android:strokeWidth="2.8"
+            android:strokeLineJoin="round"
+            android:pathData="M31,41 L31,37 Q31,31 37,31 L71,31 Q77,31 77,37 L77,41 Z" />
+        <path android:fillColor="#6B5B73"
+            android:pathData="M36,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+        <path android:fillColor="#6B5B73"
+            android:pathData="M41,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+        <path android:fillColor="#6B5B73"
+            android:pathData="M46,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+        <path android:strokeColor="#6B5B73" android:strokeWidth="2" android:strokeLineCap="round"
+            android:pathData="M37,48 L59,48.2 M37,54.2 L59.2,54 M37,66.2 L70.8,66 M37,72.2 L61.6,72" />
+        <path android:fillColor="#C7B8EE" android:strokeColor="#6B5B73" android:strokeWidth="2.2"
+            android:strokeLineJoin="round"
+            android:pathData="M63,47 L71,47 Q72,47 72,48 L72,61 Q72,62 71,62 L63,62 Q62,62 62,61 L62,48 Q62,47 63,47 Z" />
+        <path android:fillColor="#FFD98A"
+            android:pathData="M67.5,52.5 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+    </group>
+</vector>

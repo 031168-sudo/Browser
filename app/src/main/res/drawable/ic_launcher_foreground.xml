@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Окно чтения: страница с заголовком-полоской, строками текста и картинкой -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Тело окна -->
+    <path android:fillColor="#FFF8EE" android:strokeColor="#6B5B73" android:strokeWidth="2.8"
+        android:strokeLineJoin="round"
+        android:pathData="M31,41 L77,41 L77,71 Q77,77 71,77 L37,77 Q31,77 31,71 Z" />
+
+    <!-- Заголовок окна -->
+    <path android:fillColor="#A8D8EA" android:strokeColor="#6B5B73" android:strokeWidth="2.8"
+        android:strokeLineJoin="round"
+        android:pathData="M31,41 L31,37 Q31,31 37,31 L71,31 Q77,31 77,37 L77,41 Z" />
+    <!-- Точки окна -->
+    <path android:fillColor="#6B5B73"
+        android:pathData="M36,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+    <path android:fillColor="#6B5B73"
+        android:pathData="M41,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+    <path android:fillColor="#6B5B73"
+        android:pathData="M46,36 m-1.3,0 a1.3,1.3 0 1,0 2.6,0 a1.3,1.3 0 1,0 -2.6,0" />
+
+    <!-- Строки текста -->
+    <path android:strokeColor="#6B5B73" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M37,48 L59,48.2 M37,54.2 L59.2,54 M37,66.2 L70.8,66 M37,72.2 L61.6,72" />
+
+    <!-- Картинка в тексте -->
+    <path android:fillColor="#C7B8EE" android:strokeColor="#6B5B73" android:strokeWidth="2.2"
+        android:strokeLineJoin="round"
+        android:pathData="M63,47 L71,47 Q72,47 72,48 L72,61 Q72,62 71,62 L63,62 Q62,62 62,61 L62,48 Q62,47 63,47 Z" />
+    <path android:fillColor="#FFD98A"
+        android:pathData="M67.5,52.5 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+</vector>

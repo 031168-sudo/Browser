@@ -282,20 +282,8 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
             BlockView(block, prefs.fontSize, family)
         }
 
-        item { Spacer(Modifier.height(96.dp)) }
+        item { Spacer(Modifier.height(48.dp)) }
     }
-        // Кнопка всегда на экране, как бы далеко ни прокрутил статью.
-        ExtendedFloatingActionButton(
-            onClick = vm::toggleSaved,
-            icon = {
-                Icon(
-                    if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = null,
-                )
-            },
-            text = { Text(if (saved) "Сохранено" else "Сохранить") },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 16.dp),
-        )
     }
 }
 
