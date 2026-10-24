@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия релиза, например v0.2.0"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -31,10 +36,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${GITHUB_REF_NAME:-manual-$(date +%Y%m%d-%H%M)}"
+          TAG="${{ inputs.version }}"
+          if [ -z "$TAG" ]; then TAG="$GITHUB_REF_NAME"; fi
+          if [ "$TAG" = "main" ]; then TAG="build-$(date +%Y%m%d-%H%M)"; fi
           APK=app/build/outputs/apk/debug/app-debug.apk
           cp "$APK" "ReaderLite-$TAG.apk"
-          gh release create "$TAG" "ReaderLite-$TAG.apk" \
+          gh release create "$TAG" "ReaderLite-$TAG.apk" --target "$GITHUB_SHA" \
             --title "ReaderLite $TAG" \
             --notes "Сборка APK. Скачай файл и установи на Android." \
             || gh release upload "$TAG" "ReaderLite-$TAG.apk" --clobber
