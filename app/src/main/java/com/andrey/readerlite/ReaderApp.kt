@@ -56,6 +56,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -75,7 +77,7 @@ import androidx.compose.ui.text.style.TextAlign
 private enum class Tab(val label: String) {
     READ("Читать"),
     HISTORY("История"),
-    SAVED("Сохранённые"),
+    SAVED("Избранное"),
     SETTINGS("Настройки"),
 }
 
@@ -110,7 +112,7 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                                     contentDescription = item.label,
                                 )
                             },
-                            label = { Text(item.label) },
+                            label = { Text(item.label, maxLines = 1, softWrap = false) },
                         )
                     }
                 }
@@ -122,8 +124,7 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                     Tab.HISTORY -> ListScreen(
                         emptyText = "История пуста",
                         entries = vm.history.collectAsState().value,
-                        actionLabel = null,
-                        onAction = null,
+                        onToggleSaved = { vm.setSaved(it.url, !it.saved) },
                         onOpen = { entity ->
                             vm.openCached(entity)
                             tab = Tab.READ
@@ -131,10 +132,9 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                         headerAction = { ClearHistoryButton(onClear = vm::clearHistory) },
                     )
                     Tab.SAVED -> ListScreen(
-                        emptyText = "Пока ничего не отложено",
+                        emptyText = "Пока пусто. Нажми сердечко в статье или в истории.",
                         entries = vm.saved.collectAsState().value,
-                        actionLabel = "Убрать",
-                        onAction = { entity -> vm.removeSaved(entity.url) },
+                        onToggleSaved = { vm.setSaved(it.url, false) },
                         onOpen = { entity ->
                             vm.openCached(entity)
                             tab = Tab.READ
@@ -225,6 +225,7 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val family = if (prefs.serif) FontFamily.Serif else FontFamily.Default
 
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Text(
@@ -242,7 +243,13 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = vm::toggleSaved) {
-                    Text(if (saved) "Убрать" else "Сохранить")
+                    Icon(
+                        if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (saved) "Сохранено" else "Сохранить")
                 }
                 OutlinedButton(onClick = {
                     val text = buildString {
@@ -275,7 +282,20 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
             BlockView(block, prefs.fontSize, family)
         }
 
-        item { Spacer(Modifier.height(48.dp)) }
+        item { Spacer(Modifier.height(96.dp)) }
+    }
+        // Кнопка всегда на экране, как бы далеко ни прокрутил статью.
+        ExtendedFloatingActionButton(
+            onClick = vm::toggleSaved,
+            icon = {
+                Icon(
+                    if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(if (saved) "Сохранено" else "Сохранить") },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 16.dp),
+        )
     }
 }
 
@@ -340,8 +360,7 @@ private fun BlockView(block: Block, baseSize: Int, family: FontFamily) {
 private fun ListScreen(
     emptyText: String,
     entries: List<ArticleEntity>,
-    actionLabel: String?,
-    onAction: ((ArticleEntity) -> Unit)?,
+    onToggleSaved: (ArticleEntity) -> Unit,
     onOpen: (ArticleEntity) -> Unit,
     headerAction: (@Composable () -> Unit)?,
 ) {
@@ -360,14 +379,23 @@ private fun ListScreen(
                         .clickable { onOpen(entity) }
                         .padding(vertical = 10.dp)
                 ) {
-                    Text(entity.title, fontWeight = FontWeight.Medium, fontSize = 16.sp)
-                    Text(
-                        entity.siteName.ifBlank { entity.url },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (actionLabel != null && onAction != null) {
-                        TextButton(onClick = { onAction(entity) }) { Text(actionLabel) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(entity.title, fontWeight = FontWeight.Medium, fontSize = 16.sp)
+                            Text(
+                                entity.siteName.ifBlank { entity.url },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { onToggleSaved(entity) }) {
+                            Icon(
+                                if (entity.saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (entity.saved) "Убрать из сохранённых" else "Сохранить",
+                                tint = if (entity.saved) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 HorizontalDivider()

@@ -108,10 +108,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun removeSaved(url: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val existing = dao.byUrl(url) ?: return@launch
-            dao.upsert(existing.copy(saved = false))
+    /** Сохранить или убрать статью из списка (история, избранное). */
+    fun setSaved(url: String, saved: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val existing = dao.byUrl(url) ?: return@withContext
+                dao.upsert(
+                    existing.copy(
+                        saved = saved,
+                        savedAt = if (saved) System.currentTimeMillis() else existing.savedAt,
+                    )
+                )
+            }
+            // Если эта же статья сейчас открыта, обновляем и её кнопку.
+            val ready = state as? UiState.Ready
+            if (ready != null && ready.article.url == url) state = ready.copy(saved = saved)
         }
     }
 
