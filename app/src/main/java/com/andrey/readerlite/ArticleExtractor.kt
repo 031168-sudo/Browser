@@ -46,17 +46,30 @@ object ArticleExtractor {
         val siteName = doc.select("meta[property=og:site_name]").attr("content").trim()
             .ifBlank { hostOf(pageUrl) }
 
+        // Копия до любых удалений: нужна для запасного разбора.
+        val original = doc.clone()
+
+        // Основной путь: удаляем мусор по тегам и классам, берём основной контейнер.
         doc.select(JUNK_TAGS).remove()
         removeJunkByAttributes(doc)
+        var blocks = collectBlocks(findMainContainer(doc) ?: doc.body())
 
-        val root = findMainContainer(doc) ?: doc.body()
-        val blocks = collectBlocks(root)
-        if (blocks.none { it is Block.Paragraph || it is Block.Quote || it is Block.ListItem }) {
+        // Запасной путь: фильтр по классам мог вырезать текст, поэтому берём всю страницу
+        // без него, оставляя только скрипты, стили и формы.
+        if (!hasText(blocks)) {
+            original.select(JUNK_TAGS).remove()
+            blocks = collectBlocks(original.body())
+        }
+
+        if (!hasText(blocks)) {
             throw IllegalStateException("Не нашёл текст статьи на этой странице")
         }
 
         return Article(url = pageUrl, title = title, siteName = siteName, blocks = blocks)
     }
+
+    private fun hasText(blocks: List<Block>): Boolean =
+        blocks.any { it is Block.Paragraph || it is Block.Quote || it is Block.ListItem }
 
     private fun pickTitle(doc: Document): String {
         val candidates = listOf(
