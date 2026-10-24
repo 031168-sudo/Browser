@@ -51,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -329,6 +330,8 @@ private fun BlockView(block: Block, baseSize: Int, family: FontFamily) {
             AsyncImage(
                 model = block.url,
                 contentDescription = block.alt.ifBlank { null },
+                // Растягиваем на всю ширину экрана, высота — по пропорциям картинки.
+                contentScale = ContentScale.FillWidth,
                 modifier = Modifier.fillMaxWidth(),
             )
             if (block.alt.isNotBlank()) {

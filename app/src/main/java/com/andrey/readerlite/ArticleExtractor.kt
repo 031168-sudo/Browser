@@ -193,7 +193,9 @@ object ArticleExtractor {
                     if (isDecorativeImage(el)) continue
                     val url = imageUrl(el)
                     if (url.isNotEmpty() && seen.add(url)) {
-                        result += Block.Image(url, clean(el.attr("alt")))
+                        // Подпись под картинкой: сначала подпись из <figure>, иначе alt.
+                        val caption = el.closest("figure")?.selectFirst("figcaption")?.text()
+                        result += Block.Image(url, clean(caption ?: el.attr("alt")))
                     }
                 }
             }
@@ -212,17 +214,46 @@ object ArticleExtractor {
         return tokens.any { it in ICON_TOKENS }
     }
 
+    /**
+     * Адрес картинки в самом большом размере, какой есть на странице.
+     * Сайты часто кладут в src маленькую миниатюру, а крупные версии — в srcset
+     * (в том числе у <source> внутри <picture>) или в data-атрибуты для ленивой загрузки.
+     */
     private fun imageUrl(el: Element): String {
-        for (attr in listOf("src", "data-src", "data-lazy-src", "data-original")) {
+        val srcsets = buildList {
+            add(el.attr("srcset"))
+            add(el.attr("data-srcset"))
+            el.parent()?.takeIf { it.tagName() == "picture" }?.select("source")?.forEach {
+                add(it.attr("srcset"))
+                add(it.attr("data-srcset"))
+            }
+        }
+        largestFromSrcset(srcsets)?.let { return resolve(el.baseUri(), it) }
+
+        for (attr in listOf("data-original", "data-full", "data-src", "data-lazy-src", "src")) {
             val value = el.attr(attr).trim()
             if (value.isNotEmpty() && !value.startsWith("data:")) {
                 return resolve(el.baseUri(), value)
             }
         }
-        val firstFromSrcset = el.attr("srcset").split(",").firstOrNull()
-            ?.trim()?.split(" ")?.firstOrNull().orEmpty()
-        return if (firstFromSrcset.isNotEmpty()) resolve(el.baseUri(), firstFromSrcset) else ""
+        return ""
     }
+
+    /** Из записей вида "a.jpg 320w, b.jpg 1280w" (или "2x") выбирает самую крупную. */
+    private fun largestFromSrcset(srcsets: List<String>): String? =
+        srcsets.flatMap { it.split(",") }
+            .mapNotNull { entry ->
+                val parts = entry.trim().split(Regex("\\s+"))
+                val url = parts.firstOrNull()?.takeIf { it.isNotEmpty() && !it.startsWith("data:") }
+                    ?: return@mapNotNull null
+                val descriptor = parts.getOrNull(1).orEmpty()
+                val size = descriptor.dropLast(1).toFloatOrNull()?.let {
+                    if (descriptor.endsWith("x")) it * 1000 else it
+                } ?: 1f
+                url to size
+            }
+            .maxByOrNull { it.second }
+            ?.first
 
     private fun resolve(base: String, ref: String): String = try {
         URI(base).resolve(URI(ref)).toString()
