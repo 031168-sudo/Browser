@@ -29,8 +29,8 @@ jobs:
         with:
           gradle-version: 8.14.3
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon
+      - name: Build release APK
+        run: gradle :app:assembleRelease --no-daemon
 
       - name: Publish GitHub release with APK
         env:
@@ -39,7 +39,7 @@ jobs:
           TAG="${{ inputs.version }}"
           if [ -z "$TAG" ]; then TAG="$GITHUB_REF_NAME"; fi
           if [ "$TAG" = "main" ]; then TAG="build-$(date +%Y%m%d-%H%M)"; fi
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/release/app-release.apk
           cp "$APK" "ReaderLite-$TAG.apk"
           gh release create "$TAG" "ReaderLite-$TAG.apk" --target "$GITHUB_SHA" \
             --title "ReaderLite $TAG" \

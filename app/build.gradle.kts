@@ -13,13 +13,28 @@ android {
         applicationId = "com.andrey.readerlite"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
+    }
+
+    // Постоянный ключ: все сборки подписаны одинаково, поэтому новые версии
+    // ставятся поверх старых без удаления приложения.
+    signingConfigs {
+        create("readerlite") {
+            storeFile = file("readerlite.jks")
+            storePassword = "bN7RwVAverhqgkR5C40C4tJf"
+            keyAlias = "readerlite"
+            keyPassword = "bN7RwVAverhqgkR5C40C4tJf"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("readerlite")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("readerlite")
         }
     }
 
