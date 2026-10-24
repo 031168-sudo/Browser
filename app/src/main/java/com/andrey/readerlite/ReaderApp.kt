@@ -51,6 +51,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -142,29 +152,67 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
 private fun ReadScreen(vm: ReaderViewModel) {
     var input by rememberSaveable { mutableStateOf("") }
     val state = vm.state
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    val submit = {
+        if (input.isNotBlank()) {
+            keyboard?.hide()
+            focus.clearFocus()
+            vm.open(input)
+        }
+    }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                placeholder = { Text("Ссылка на статью") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-                keyboardActions = KeyboardActions(onGo = { vm.open(input) }),
-            )
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = { vm.open(input) }) { Text("Открыть") }
-        }
-        Spacer(Modifier.height(12.dp))
+        // Строка ввода-«пилюля»: слева лупа, справа крестик и круглая кнопка со стрелкой.
+        TextField(
+            value = input,
+            onValueChange = { input = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(50),
+            placeholder = { Text("Вставь ссылку на статью") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (input.isNotEmpty()) {
+                        IconButton(onClick = { input = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                        }
+                    }
+                    FilledIconButton(
+                        onClick = submit,
+                        enabled = input.isNotBlank(),
+                        modifier = Modifier.padding(end = 6.dp).size(42.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Открыть")
+                    }
+                }
+            },
+            colors = TextFieldDefaults.colors(
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { submit() }),
+        )
+        Spacer(Modifier.height(16.dp))
 
         when (val s = state) {
             UiState.Idle -> Text(
                 "Вставь ссылку или отправь страницу в приложение через «Поделиться».",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            UiState.Loading -> CircularProgressIndicator(Modifier.padding(top = 24.dp))
+            is UiState.Loading -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 24.dp),
+            ) {
+                CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                Spacer(Modifier.width(12.dp))
+                Text(s.note, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             is UiState.Error -> Text(s.message, color = MaterialTheme.colorScheme.error)
             is UiState.Ready -> ArticleView(s.article, s.saved, vm)
         }

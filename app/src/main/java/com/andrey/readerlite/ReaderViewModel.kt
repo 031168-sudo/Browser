@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
 
 data class ReaderPrefs(
     val darkTheme: Boolean = true,
@@ -23,7 +24,7 @@ data class ReaderPrefs(
 
 sealed interface UiState {
     data object Idle : UiState
-    data object Loading : UiState
+    data class Loading(val note: String) : UiState
     data class Error(val message: String) : UiState
     data class Ready(val article: Article, val saved: Boolean) : UiState
 }
@@ -52,10 +53,21 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
             state = UiState.Error("Похоже, это не ссылка. Вставь адрес, который начинается с https://")
             return
         }
-        state = UiState.Loading
+        state = UiState.Loading("Загружаю страницу…")
         viewModelScope.launch {
             state = try {
-                val article = withContext(Dispatchers.IO) { ArticleExtractor.fetch(url) }
+                // Быстрый путь: просто скачать HTML. Если текста нет (страница строится
+                // скриптами или закрыта проверкой на бота), открываем её в скрытом браузере.
+                val article = withContext(Dispatchers.IO) {
+                    runCatching { ArticleExtractor.fetch(url) }.getOrNull()
+                } ?: run {
+                    state = UiState.Loading("Страница сложная, открываю через встроенный браузер…")
+                    val html = WebRenderer.render(getApplication(), url)
+                        ?: throw IllegalStateException("страница не загрузилась")
+                    withContext(Dispatchers.Default) {
+                        ArticleExtractor.extract(Jsoup.parse(html, url), url)
+                    }
+                }
                 val saved = withContext(Dispatchers.IO) { store(article) }
                 UiState.Ready(article, saved)
             } catch (e: Exception) {

@@ -3,6 +3,9 @@ package com.andrey.readerlite
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
 import java.net.URI
 
 /**
@@ -48,17 +51,25 @@ object ArticleExtractor {
 
         // Копия до любых удалений: нужна для запасного разбора.
         val original = doc.clone()
+        // Текст из разметки schema.org (JSON-LD) — его достаём, пока скрипты не удалены.
+        val ldBlocks = jsonLdBody(original)
 
         // Основной путь: удаляем мусор по тегам и классам, берём основной контейнер.
         doc.select(JUNK_TAGS).remove()
         removeJunkByAttributes(doc)
-        var blocks = collectBlocks(findMainContainer(doc) ?: doc.body())
+        var blocks = collectBlocks(findMainContainer(doc) ?: doc.body(), loose = false)
 
         // Запасной путь: фильтр по классам мог вырезать текст, поэтому берём всю страницу
-        // без него, оставляя только скрипты, стили и формы.
+        // без него. Заодно считаем абзацами и div-ы с длинным текстом, на случай если сайт
+        // не использует тег <p>.
         if (!hasText(blocks)) {
             original.select(JUNK_TAGS).remove()
-            blocks = collectBlocks(original.body())
+            blocks = collectBlocks(original.body(), loose = true)
+        }
+
+        // Последний вариант: текст статьи из JSON-LD.
+        if (!hasText(blocks)) {
+            blocks = ldBlocks
         }
 
         if (!hasText(blocks)) {
@@ -113,12 +124,49 @@ object ArticleExtractor {
 
     private fun textLength(el: Element): Int = el.text().length
 
-    private fun collectBlocks(root: Element): List<Block> {
+    private fun jsonLdBody(doc: Document): List<Block> {
+        for (script in doc.select("script[type=application/ld+json]")) {
+            val body = findArticleBody(script.data()) ?: continue
+            val blocks = if (body.contains('<')) {
+                collectBlocks(Jsoup.parseBodyFragment(body).body(), loose = true)
+            } else {
+                body.split(Regex("\\n+")).map { clean(it) }.filter { it.length > 1 }
+                    .map { Block.Paragraph(it) }
+            }
+            if (hasText(blocks)) return blocks
+        }
+        return emptyList()
+    }
+
+    private fun findArticleBody(json: String): String? = try {
+        findKey(JSONTokener(json.trim()).nextValue(), "articleBody")
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun findKey(node: Any?, key: String): String? = when (node) {
+        is JSONObject -> node.optString(key).takeIf { it.isNotBlank() }
+            ?: node.keys().asSequence().firstNotNullOfOrNull { findKey(node.opt(it), key) }
+        is JSONArray -> (0 until node.length()).firstNotNullOfOrNull { findKey(node.opt(it), key) }
+        else -> null
+    }
+
+    private fun collectBlocks(root: Element, loose: Boolean): List<Block> {
         val result = mutableListOf<Block>()
         val seen = HashSet<String>()
+        val selector = if (loose) {
+            "h2, h3, h4, p, blockquote, li, pre, img, div"
+        } else {
+            "h2, h3, h4, p, blockquote, li, pre, img"
+        }
 
-        for (el in root.select("h2, h3, h4, p, blockquote, li, pre, img")) {
+        for (el in root.select(selector)) {
             when (el.tagName()) {
+                "div" -> {
+                    // Только собственный текст div-а, без вложенных элементов, иначе будут дубли.
+                    val text = clean(el.ownText())
+                    if (text.length >= 80 && seen.add(text)) result += Block.Paragraph(text)
+                }
                 "h2", "h3", "h4" -> {
                     val text = clean(el.text())
                     if (text.isNotEmpty() && seen.add(text)) {
