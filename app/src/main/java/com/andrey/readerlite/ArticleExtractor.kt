@@ -75,8 +75,39 @@ object ArticleExtractor {
         if (!hasText(blocks)) {
             throw IllegalStateException("Не нашёл текст статьи на этой странице")
         }
+        blocks = dropBadCaptions(blocks, title)
 
         return Article(url = pageUrl, title = title, siteName = siteName, blocks = blocks)
+    }
+
+    /**
+     * Подпись, которая принадлежит именно этой картинке: <figure> с одной картинкой
+     * и собственной <figcaption>. У галерей и общих блоков подпись общая — её не берём.
+     */
+    private fun ownCaption(img: Element): String {
+        val figure = img.closest("figure") ?: return ""
+        if (figure.select("img").size != 1) return ""
+        val caption = figure.children().firstOrNull { it.tagName() == "figcaption" } ?: return ""
+        return clean(caption.text())
+    }
+
+    /**
+     * Убирает подписи, которые на самом деле не подписи: повтор заголовка статьи
+     * и одна и та же фраза под несколькими картинками.
+     */
+    private fun dropBadCaptions(blocks: List<Block>, title: String): List<Block> {
+        fun norm(s: String) = s.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+        val normTitle = norm(title)
+        val counts = blocks.filterIsInstance<Block.Image>()
+            .map { norm(it.alt) }.filter { it.isNotEmpty() }
+            .groupingBy { it }.eachCount()
+        return blocks.map { block ->
+            if (block !is Block.Image || block.alt.isEmpty()) return@map block
+            val n = norm(block.alt)
+            val isTitle = n == normTitle || (n.length > 20 && (normTitle.contains(n) || n.contains(normTitle)))
+            val repeated = (counts[n] ?: 0) > 1
+            if (isTitle || repeated) block.copy(alt = "") else block
+        }
     }
 
     private fun hasText(blocks: List<Block>): Boolean =
@@ -197,7 +228,7 @@ object ArticleExtractor {
                     if (url.isNotEmpty() && seen.add(url)) {
                         // Подпись — только настоящая подпись с сайта (<figcaption>).
                         // Служебный alt («Фото 1» и т. п.) не показываем.
-                        val caption = clean(el.closest("figure")?.selectFirst("figcaption")?.text().orEmpty())
+                        val caption = ownCaption(el)
                         // Если та же фраза встретится ниже отдельным абзацем, она не повторится.
                         if (caption.isNotEmpty()) seen.add(caption)
                         result += Block.Image(url, caption)
