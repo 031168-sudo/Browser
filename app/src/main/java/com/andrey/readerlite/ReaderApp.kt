@@ -327,13 +327,7 @@ private fun BlockView(block: Block, baseSize: Int, family: FontFamily) {
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         )
         is Block.Image -> Column(Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-            AsyncImage(
-                model = block.url,
-                contentDescription = block.alt.ifBlank { null },
-                // Растягиваем на всю ширину экрана, высота — по пропорциям картинки.
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            ArticleImage(url = block.url, alt = block.alt)
             if (block.alt.isNotBlank()) {
                 Text(
                     block.alt,
@@ -355,6 +349,7 @@ private fun ListScreen(
     onOpen: (ArticleEntity) -> Unit,
     headerAction: (@Composable () -> Unit)?,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
         if (headerAction != null) {
             headerAction()
@@ -377,6 +372,15 @@ private fun ListScreen(
                                 entity.siteName.ifBlank { entity.url },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = {
+                            ShareActions.shareLink(context, entity.url, entity.title)
+                        }) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Поделиться ссылкой",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         IconButton(onClick = { onToggleSaved(entity) }) {
