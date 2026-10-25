@@ -1,6 +1,11 @@
 package com.andrey.readerlite
 
+import android.app.Activity
 import android.content.Intent
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -478,6 +483,22 @@ private fun ReaderTheme(dark: Boolean, content: @Composable () -> Unit) {
         )
     } else {
         lightColorScheme()
+    }
+    // Верхняя и нижняя системные полосы под цвет темы: на светлом фоне значки
+    // (часы, батарея, кнопки навигации) должны быть тёмными, иначе их не видно.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            @Suppress("DEPRECATION")
+            window.statusBarColor = scheme.background.toArgb()
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = scheme.surfaceContainer.toArgb()
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = !dark
+                isAppearanceLightNavigationBars = !dark
+            }
+        }
     }
     MaterialTheme(colorScheme = scheme, content = content)
 }
