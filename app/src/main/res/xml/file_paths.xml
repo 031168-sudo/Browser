@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Временные копии картинок для «Поделиться картинкой» -->
+    <cache-path name="shared" path="shared/" />
+</paths>
