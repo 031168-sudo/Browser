@@ -374,22 +374,24 @@ private fun ListScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = {
-                            ShareActions.shareLink(context, entity.url, entity.title)
-                        }) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Поделиться ссылкой",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        IconButton(onClick = { onToggleSaved(entity) }) {
-                            Icon(
-                                if (entity.saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (entity.saved) "Убрать из сохранённых" else "Сохранить",
-                                tint = if (entity.saved) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            IconButton(onClick = {
+                                ShareActions.shareLink(context, entity.url, entity.title)
+                            }) {
+                                Icon(
+                                    Icons.Default.Share,
+                                    contentDescription = "Поделиться ссылкой",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            IconButton(onClick = { onToggleSaved(entity) }) {
+                                Icon(
+                                    if (entity.saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (entity.saved) "Убрать из сохранённых" else "Сохранить",
+                                    tint = if (entity.saved) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }
