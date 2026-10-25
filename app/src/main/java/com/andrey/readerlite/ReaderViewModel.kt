@@ -16,8 +16,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 
+/** Тема оформления: как в системе, всегда тёмная или всегда светлая. */
+enum class ThemeMode(val label: String) {
+    SYSTEM("Как в системе"),
+    DARK("Тёмная"),
+    LIGHT("Светлая"),
+}
+
 data class ReaderPrefs(
-    val darkTheme: Boolean = true,
+    val theme: ThemeMode = ThemeMode.SYSTEM,
     val fontSize: Int = 18,
     val serif: Boolean = false,
 )
@@ -133,7 +140,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     fun updatePrefs(transform: (ReaderPrefs) -> ReaderPrefs) {
         val next = transform(prefs)
         prefsStore.edit()
-            .putBoolean(KEY_DARK, next.darkTheme)
+            .putString(KEY_THEME, next.theme.name)
             .putInt(KEY_FONT, next.fontSize)
             .putBoolean(KEY_SERIF, next.serif)
             .apply()
@@ -159,7 +166,14 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun loadPrefs(): ReaderPrefs = ReaderPrefs(
-        darkTheme = prefsStore.getBoolean(KEY_DARK, true),
+        theme = prefsStore.getString(KEY_THEME, null)
+            ?.let { saved -> ThemeMode.entries.firstOrNull { it.name == saved } }
+            // Раньше был переключатель «Тёмная тема»: переносим его значение, если он менялся.
+            ?: when {
+                !prefsStore.contains(KEY_DARK) -> ThemeMode.SYSTEM
+                prefsStore.getBoolean(KEY_DARK, true) -> ThemeMode.DARK
+                else -> ThemeMode.LIGHT
+            },
         fontSize = prefsStore.getInt(KEY_FONT, 18),
         serif = prefsStore.getBoolean(KEY_SERIF, false),
     )
@@ -171,6 +185,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         private const val KEY_DARK = "dark"
+        private const val KEY_THEME = "theme"
         private const val KEY_FONT = "font"
         private const val KEY_SERIF = "serif"
 

@@ -51,6 +51,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,7 +96,12 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
         }
     }
 
-    ReaderTheme(dark = prefs.darkTheme) {
+    val dark = when (prefs.theme) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+    }
+    ReaderTheme(dark = dark) {
         Scaffold(
             bottomBar = {
                 NavigationBar {
@@ -410,16 +417,23 @@ private fun ClearHistoryButton(onClear: () -> Unit) {
 private fun SettingsScreen(vm: ReaderViewModel) {
     val prefs = vm.prefs
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Тёмная тема")
-            Switch(
-                checked = prefs.darkTheme,
-                onCheckedChange = { v -> vm.updatePrefs { it.copy(darkTheme = v) } },
-            )
+        Text("Тема", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        ThemeMode.entries.forEach { mode ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { vm.updatePrefs { it.copy(theme = mode) } }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = prefs.theme == mode,
+                    onClick = { vm.updatePrefs { it.copy(theme = mode) } },
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(mode.label)
+            }
         }
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
 
