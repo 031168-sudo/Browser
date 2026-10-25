@@ -161,6 +161,8 @@ object ArticleExtractor {
         }
 
         for (el in root.select(selector)) {
+            // Текст внутри подписи к картинке показываем только под картинкой, не абзацем.
+            if (el.tagName() != "img" && el.closest("figcaption") != null) continue
             when (el.tagName()) {
                 "div" -> {
                     // Только собственный текст div-а, без вложенных элементов, иначе будут дубли.
@@ -193,9 +195,12 @@ object ArticleExtractor {
                     if (isDecorativeImage(el)) continue
                     val url = imageUrl(el)
                     if (url.isNotEmpty() && seen.add(url)) {
-                        // Подпись под картинкой: сначала подпись из <figure>, иначе alt.
-                        val caption = el.closest("figure")?.selectFirst("figcaption")?.text()
-                        result += Block.Image(url, clean(caption ?: el.attr("alt")))
+                        // Подпись — только настоящая подпись с сайта (<figcaption>).
+                        // Служебный alt («Фото 1» и т. п.) не показываем.
+                        val caption = clean(el.closest("figure")?.selectFirst("figcaption")?.text().orEmpty())
+                        // Если та же фраза встретится ниже отдельным абзацем, она не повторится.
+                        if (caption.isNotEmpty()) seen.add(caption)
+                        result += Block.Image(url, caption)
                     }
                 }
             }
