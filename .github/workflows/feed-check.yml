@@ -17,7 +17,7 @@ jobs:
           gradle-version: 8.14.3
       - name: Run feed tests
         continue-on-error: true
-        run: gradle :app:testReleaseUnitTest --no-daemon --tests '*RssSourcesTest*'
+        run: gradle :app:testReleaseUnitTest --no-daemon --tests '*SearchCheckTest*'
       - name: Report
         if: always()
         run: |
