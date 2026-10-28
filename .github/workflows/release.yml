@@ -34,6 +34,14 @@ jobs:
         continue-on-error: true
         run: gradle :app:testReleaseUnitTest --no-daemon
 
+      - name: Report feed check
+        if: always()
+        run: |
+          MSG=$(grep -ho 'FEED[^<]*' app/build/test-results/testReleaseUnitTest/*.xml 2>/dev/null | head -30 | sed ':a;N;$!ba;s/\n/%0A/g')
+          FAIL=$(grep -ho '<failure message="[^"]*"' app/build/test-results/testReleaseUnitTest/*.xml 2>/dev/null | head -5 | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::notice title=Feed check::${MSG:-нет вывода}"
+          if [ -n "$FAIL" ]; then echo "::warning title=Feed check failed::$FAIL"; fi
+
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon
 
