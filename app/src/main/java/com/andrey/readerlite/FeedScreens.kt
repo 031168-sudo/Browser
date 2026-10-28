@@ -221,9 +221,33 @@ fun FeedSettingsSection(feed: FeedViewModel) {
     AddRow(placeholder = "Новая тема", onAdd = feed::addQuery)
 
     Spacer(Modifier.height(12.dp))
+    SectionTitle("Издания")
+    Hint("Отметь сайты — их новости появятся в ленте, у каждого своя вкладка сверху.")
+    RssCatalog.groups.forEach { (group, presets) ->
+        Text(
+            group,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+        )
+        presets.forEach { preset ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { feed.toggleRss(preset.url) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = preset.url in feed.rssFeeds, onCheckedChange = { feed.toggleRss(preset.url) })
+                Text(preset.name)
+            }
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
     SectionTitle("Свои сайты (RSS)")
-    Hint("Адрес RSS-ленты сайта, например lenta.ru/rss или 3dnews.ru/news/rss.")
-    feed.rssFeeds.sorted().forEach { url -> RemovableRow(url) { feed.removeRss(url) } }
+    Hint("Если нужного сайта нет в списке — впиши адрес его RSS-ленты.")
+    feed.rssFeeds.filterNot { RssCatalog.isPreset(it) }.sorted()
+        .forEach { url -> RemovableRow(url) { feed.removeRss(url) } }
     AddRow(placeholder = "Адрес ленты", onAdd = feed::addRss)
 
     Spacer(Modifier.height(12.dp))

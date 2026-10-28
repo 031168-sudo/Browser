@@ -58,9 +58,63 @@ sealed interface FeedSource {
 
     data class Rss(val feedUrl: String) : FeedSource {
         override val key = "r:" + feedUrl
-        override val label = hostOf(feedUrl).ifBlank { feedUrl }
+        override val label = RssCatalog.nameFor(feedUrl) ?: hostOf(feedUrl).ifBlank { feedUrl }
         override val url = feedUrl
     }
+}
+
+/** Издание из готового списка. */
+data class RssPreset(val name: String, val url: String)
+
+/**
+ * Готовый список RSS-лент изданий по рубрикам. Все адреса проверены:
+ * лента отдаёт новости (октябрь 2026).
+ */
+object RssCatalog {
+    val groups: List<Pair<String, List<RssPreset>>> = listOf(
+        "Общие новости" to listOf(
+            RssPreset("Лента.ру", "https://lenta.ru/rss"),
+            RssPreset("РИА Новости", "https://ria.ru/export/rss2/archive/index.xml"),
+            RssPreset("ТАСС", "https://tass.ru/rss/v2.xml"),
+            RssPreset("Интерфакс", "https://www.interfax.ru/rss.asp"),
+            RssPreset("РБК", "https://rssexport.rbc.ru/rbcnews/news/30/full.rss"),
+            RssPreset("Коммерсантъ", "https://www.kommersant.ru/RSS/news.xml"),
+            RssPreset("Ведомости", "https://www.vedomosti.ru/rss/news"),
+            RssPreset("Известия", "https://iz.ru/xml/rss/all.xml"),
+            RssPreset("Российская газета", "https://rg.ru/xml/index.xml"),
+            RssPreset("RT", "https://russian.rt.com/rss"),
+            RssPreset("Газета.ру", "https://www.gazeta.ru/export/rss/social_more.xml"),
+            RssPreset("Москва 24", "https://www.m24.ru/rss.xml"),
+            RssPreset("Фонтанка", "https://www.fontanka.ru/rss-feeds/rss.xml"),
+        ),
+        "Техника и наука" to listOf(
+            RssPreset("iXBT", "https://www.ixbt.com/export/news.rss"),
+            RssPreset("3DNews", "https://3dnews.ru/news/rss/"),
+            RssPreset("Хабр — статьи", "https://habr.com/ru/rss/articles/?fl=ru"),
+            RssPreset("Хабр — новости", "https://habr.com/ru/rss/news/?fl=ru"),
+            RssPreset("CNews", "https://www.cnews.ru/inc/rss/news.xml"),
+            RssPreset("Ferra", "https://www.ferra.ru/exports/rss.xml"),
+            RssPreset("Хайтек Mail", "https://hi-tech.mail.ru/rss/all/"),
+            RssPreset("N+1", "https://nplus1.ru/rss"),
+            RssPreset("Naked Science", "https://naked-science.ru/feed"),
+        ),
+        "Авто" to listOf(
+            RssPreset("Autonews", "https://rssexport.rbc.ru/autonews/news/30/full.rss"),
+            RssPreset("Motor.ru", "https://motor.ru/exports/rss"),
+            RssPreset("Колёса.ру", "https://www.kolesa.ru/rss"),
+            RssPreset("Авто Mail", "https://auto.mail.ru/rss/"),
+            RssPreset("Drom", "https://www.drom.ru/export/xml/news.rss"),
+        ),
+        "Спорт" to listOf(
+            RssPreset("Чемпионат", "https://www.championat.com/rss/news/"),
+            RssPreset("Спорт-Экспресс", "https://www.sport-express.ru/services/materials/news/se/"),
+        ),
+    )
+
+    private val byUrl = groups.flatMap { it.second }.associateBy { it.url }
+
+    fun nameFor(url: String): String? = byUrl[url]?.name
+    fun isPreset(url: String): Boolean = url in byUrl
 }
 
 private const val UA =

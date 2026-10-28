@@ -128,7 +128,13 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         loadJob = viewModelScope.launch {
             val results = withContext(Dispatchers.IO) {
                 list.map { src ->
-                    async { runCatching { FeedLoader.load(src.url) }.getOrElse { emptyList() } }
+                    async {
+                        val loaded = runCatching { FeedLoader.load(src.url) }.getOrElse { emptyList() }
+                        // Новости изданий из готового списка подписываем его названием,
+                        // чтобы скрытие ресурса работало одинаково.
+                        val presetName = (src as? FeedSource.Rss)?.let { RssCatalog.nameFor(it.feedUrl) }
+                        if (presetName != null) loaded.map { it.copy(source = presetName) } else loaded
+                    }
                 }.awaitAll()
             }
             val merged = results.flatten()
@@ -186,6 +192,13 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         val url = raw.trim().let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
         if (hostOf(url).isEmpty()) return
         rssFeeds = rssFeeds + url
+        save(KEY_RSS, rssFeeds)
+        afterSourcesChanged()
+    }
+
+    /** Включить или выключить издание из готового списка. */
+    fun toggleRss(url: String) {
+        rssFeeds = if (url in rssFeeds) rssFeeds - url else rssFeeds + url
         save(KEY_RSS, rssFeeds)
         afterSourcesChanged()
     }

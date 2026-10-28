@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.automirrored.filled.List
@@ -115,6 +116,8 @@ fun ReaderApp(
         ThemeMode.LIGHT -> false
     }
     ReaderTheme(dark = dark) {
+        var labelSize by remember { mutableStateOf(12.sp) }
+        var labelsFit by remember { mutableStateOf(false) }
         Scaffold(
             bottomBar = {
                 NavigationBar {
@@ -135,11 +138,21 @@ fun ReaderApp(
                                 )
                             },
                             label = {
+                                // Если подпись не влезает, уменьшаем общий размер для всех вкладок,
+                                // пока не влезут все: так подписи целые и одного размера.
                                 Text(
                                     item.label,
                                     maxLines = 1,
                                     softWrap = false,
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = labelSize),
+                                    modifier = Modifier.drawWithContent { if (labelsFit) drawContent() },
+                                    onTextLayout = { layout ->
+                                        if (layout.didOverflowWidth && labelSize.value > 7f) {
+                                            labelSize = (labelSize.value * 0.92f).sp
+                                        } else {
+                                            labelsFit = true
+                                        }
+                                    },
                                 )
                             },
                         )
