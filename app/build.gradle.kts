@@ -13,8 +13,8 @@ android {
         applicationId = "com.andrey.readerlite"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.12.0"
+        versionCode = 13
+        versionName = "0.13.0"
     }
 
     // Постоянный ключ: все сборки подписаны одинаково, поэтому новые версии
@@ -67,4 +67,16 @@ dependencies {
 
     implementation("org.jsoup:jsoup:1.18.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Автотест ленты на сервере сборки: настоящие запросы к Google Новостям.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+}
+
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
 }

@@ -29,6 +29,11 @@ jobs:
         with:
           gradle-version: 8.14.3
 
+      # Проверка ленты на живых данных. Не блокирует выпуск, только показывает результат.
+      - name: Check news feed (live)
+        continue-on-error: true
+        run: gradle :app:testReleaseUnitTest --no-daemon
+
       - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon
 

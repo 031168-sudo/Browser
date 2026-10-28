@@ -54,6 +54,18 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     var prefs: ReaderPrefs by mutableStateOf(loadPrefs())
         private set
 
+    /**
+     * Открыть новость из ленты: сначала узнаём настоящий адрес статьи
+     * (у Google Новостей ссылка — переадресация), потом открываем как обычно.
+     */
+    fun openResolving(link: String, resolve: suspend () -> String?) {
+        state = UiState.Loading("Открываю новость…")
+        viewModelScope.launch {
+            val real = runCatching { resolve() }.getOrNull()
+            open(real ?: link)
+        }
+    }
+
     fun open(rawUrl: String) {
         val url = normalizeUrl(rawUrl)
         if (url == null) {

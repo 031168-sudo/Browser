@@ -56,6 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.ui.layout.ContentScale
@@ -83,6 +86,7 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.text.style.TextAlign
 
 private enum class Tab(val label: String) {
+    FEED("Лента"),
     READ("Читать"),
     HISTORY("История"),
     SAVED("Избранное"),
@@ -90,9 +94,13 @@ private enum class Tab(val label: String) {
 }
 
 @Composable
-fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
+fun ReaderApp(
+    initialUrl: String?,
+    vm: ReaderViewModel = viewModel(),
+    feedVm: FeedViewModel = viewModel(),
+) {
     val prefs = vm.prefs
-    var tab by rememberSaveable { mutableStateOf(Tab.READ) }
+    var tab by rememberSaveable { mutableStateOf(Tab.FEED) }
 
     LaunchedEffect(initialUrl) {
         if (!initialUrl.isNullOrBlank()) {
@@ -117,6 +125,7 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                             icon = {
                                 Icon(
                                     imageVector = when (item) {
+                                        Tab.FEED -> Icons.AutoMirrored.Filled.List
                                         Tab.READ -> Icons.Default.Search
                                         Tab.HISTORY -> Icons.Default.DateRange
                                         Tab.SAVED -> Icons.Default.Favorite
@@ -125,7 +134,14 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                                     contentDescription = item.label,
                                 )
                             },
-                            label = { Text(item.label, maxLines = 1, softWrap = false) },
+                            label = {
+                                Text(
+                                    item.label,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            },
                         )
                     }
                 }
@@ -133,6 +149,10 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
                 when (tab) {
+                    Tab.FEED -> FeedScreen(feedVm, onOpen = { item ->
+                        tab = Tab.READ
+                        vm.openResolving(item.link) { feedVm.realUrl(item) }
+                    })
                     Tab.READ -> ReadScreen(vm)
                     Tab.HISTORY -> ListScreen(
                         emptyText = "История пуста",
@@ -154,7 +174,7 @@ fun ReaderApp(initialUrl: String?, vm: ReaderViewModel = viewModel()) {
                         },
                         headerAction = null,
                     )
-                    Tab.SETTINGS -> SettingsScreen(vm)
+                    Tab.SETTINGS -> SettingsScreen(vm, feedVm)
                 }
             }
         }
@@ -419,9 +439,14 @@ private fun ClearHistoryButton(onClear: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(vm: ReaderViewModel) {
+private fun SettingsScreen(vm: ReaderViewModel, feedVm: FeedViewModel) {
     val prefs = vm.prefs
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
         Text("Тема", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(4.dp))
         ThemeMode.entries.forEach { mode ->
@@ -463,6 +488,8 @@ private fun SettingsScreen(vm: ReaderViewModel) {
             steps = 13,
         )
 
+        HorizontalDivider(Modifier.padding(vertical = 12.dp))
+        FeedSettingsSection(feedVm)
         Spacer(Modifier.height(24.dp))
         Text(
             "Всё хранится только на этом телефоне. Облака и синхронизации нет.",
