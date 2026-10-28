@@ -56,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbUp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.rememberScrollState
@@ -189,6 +191,8 @@ fun ReaderApp(
                         emptyText = "История пуста",
                         entries = vm.history.collectAsState().value,
                         onToggleSaved = { vm.setSaved(it.url, !it.saved) },
+                        isLiked = { it.url in feedVm.liked },
+                        onLike = { feedVm.toggleLike(it.asFeedItem()) },
                         onOpen = { entity ->
                             vm.openCached(entity)
                             tab = Tab.READ
@@ -199,6 +203,8 @@ fun ReaderApp(
                         emptyText = "Пока пусто. Нажми сердечко в статье или в истории.",
                         entries = vm.saved.collectAsState().value,
                         onToggleSaved = { vm.setSaved(it.url, false) },
+                        isLiked = { it.url in feedVm.liked },
+                        onLike = { feedVm.toggleLike(it.asFeedItem()) },
                         onOpen = { entity ->
                             vm.openCached(entity)
                             tab = Tab.READ
@@ -409,6 +415,8 @@ private fun ListScreen(
     emptyText: String,
     entries: List<ArticleEntity>,
     onToggleSaved: (ArticleEntity) -> Unit,
+    isLiked: (ArticleEntity) -> Boolean,
+    onLike: (ArticleEntity) -> List<String>,
     onOpen: (ArticleEntity) -> Unit,
     headerAction: (@Composable () -> Unit)?,
 ) {
@@ -438,6 +446,24 @@ private fun ListScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val liked = isLiked(entity)
+                            IconButton(onClick = {
+                                val words = onLike(entity)
+                                if (words.isNotEmpty()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Буду чаще показывать: " + words.take(4).joinToString(", "),
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            }) {
+                                Icon(
+                                    if (liked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                    contentDescription = "Интересно",
+                                    tint = if (liked) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                             IconButton(onClick = {
                                 ShareActions.shareLink(context, entity.url, entity.title)
                             }) {
@@ -572,3 +598,13 @@ private fun StringBuilder.appendPlain(block: Block) {
         is Block.Image -> Unit // картинки в текстовый экспорт не попадают
     }
 }
+
+/** Статья из истории или избранного в виде новости — чтобы отметить её «Интересно». */
+private fun ArticleEntity.asFeedItem() = FeedItem(
+    title = title,
+    link = url,
+    source = siteName,
+    publishedAt = 0L,
+    imageUrl = null,
+    fromGoogle = false,
+)
