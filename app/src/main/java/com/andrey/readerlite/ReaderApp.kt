@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbUp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.rememberScrollState
@@ -186,7 +188,7 @@ fun ReaderApp(
                             }
                         },
                     )
-                    Tab.READ -> ReadScreen(vm)
+                    Tab.READ -> ReadScreen(vm, feedVm)
                     Tab.HISTORY -> ListScreen(
                         emptyText = "История пуста",
                         entries = vm.history.collectAsState().value,
@@ -219,7 +221,7 @@ fun ReaderApp(
 }
 
 @Composable
-private fun ReadScreen(vm: ReaderViewModel) {
+private fun ReadScreen(vm: ReaderViewModel, feedVm: FeedViewModel) {
     var input by rememberSaveable { mutableStateOf("") }
     val state = vm.state
     val keyboard = LocalSoftwareKeyboardController.current
@@ -284,13 +286,39 @@ private fun ReadScreen(vm: ReaderViewModel) {
                 Text(s.note, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             is UiState.Error -> Text(s.message, color = MaterialTheme.colorScheme.error)
-            is UiState.Ready -> ArticleView(s.article, s.saved, vm)
+            is UiState.Ready -> ArticleView(s.article, s.saved, vm, feedVm)
         }
     }
 }
 
 @Composable
-private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel, feedVm: FeedViewModel) {
+    val liked = article.url in feedVm.liked
+    // «Интересно» внутри статьи: оцениваешь уже прочитанное.
+    val likeButton: @Composable () -> Unit = {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        OutlinedButton(onClick = {
+            val words = feedVm.toggleLike(
+                FeedItem(article.title, article.url, article.siteName, 0L, null, false)
+            )
+            if (words.isNotEmpty()) {
+                android.widget.Toast.makeText(
+                    ctx,
+                    "Буду чаще показывать: " + words.take(4).joinToString(", "),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }) {
+            Icon(
+                if (liked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(if (liked) "Интересно ✓" else "Интересно")
+        }
+    }
     val prefs = vm.prefs
     val context = androidx.compose.ui.platform.LocalContext.current
     val family = if (prefs.serif) FontFamily.Serif else FontFamily.Default
@@ -311,7 +339,9 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Кнопки переносятся на вторую строку, если не влезают при крупном шрифте.
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                likeButton()
                 OutlinedButton(onClick = vm::toggleSaved) {
                     Icon(
                         if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -350,6 +380,14 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel) {
 
         items(article.blocks) { block ->
             BlockView(block, prefs.fontSize, family)
+        }
+
+        // И в конце статьи — дочитал и сразу отметил.
+        item {
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { likeButton() }
         }
 
         item { Spacer(Modifier.height(48.dp)) }
