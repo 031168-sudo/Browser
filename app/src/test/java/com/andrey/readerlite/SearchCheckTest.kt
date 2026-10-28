@@ -11,8 +11,7 @@ class SearchCheckTest {
         val q = "автомобиль"
         val urls = listOf(
             "google" to GoogleNews.searchUrl(q),
-            "bing" to "https://www.bing.com/news/search?q=" +
-                java.net.URLEncoder.encode(q, "UTF-8") + "&format=rss&setlang=ru&cc=ru",
+            "bing" to BingNews.searchUrl(q),
         )
         urls.forEach { (name, url) ->
             val t = System.currentTimeMillis()

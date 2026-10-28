@@ -126,10 +126,21 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         loading = true
         error = null
         loadJob = viewModelScope.launch {
+            val failures = java.util.Collections.synchronizedList(mutableListOf<String>())
             val results = withContext(Dispatchers.IO) {
-                list.map { src ->
+                list.flatMap { src -> src.urls.map { url -> src to url } }.map { (src, url) ->
                     async {
-                        val loaded = runCatching { FeedLoader.load(src.url) }.getOrElse { emptyList() }
+                        val loaded = try {
+                            FeedLoader.load(url)
+                        } catch (e: Exception) {
+                            val where = when {
+                                GoogleNews.isGoogleLink(url) -> "Google"
+                                BingNews.isBing(url) -> "Bing"
+                                else -> src.label
+                            }
+                            failures += "«${src.label}» ($where): ${describeError(e)}"
+                            emptyList()
+                        }
                         // Новости изданий из готового списка подписываем его названием,
                         // чтобы скрытие ресурса работало одинаково.
                         val presetName = (src as? FeedSource.Rss)?.let { RssCatalog.nameFor(it.feedUrl) }
@@ -146,7 +157,13 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
             loading = false
             if (toTop && merged.isNotEmpty()) listState.scrollToItem(0)
             withContext(Dispatchers.IO) { saveCache(merged) }
-            if (merged.isEmpty()) error = "Новости не загрузились. Проверь интернет и нажми «Обновить»."
+            if (merged.isEmpty()) {
+                error = if (failures.isEmpty()) {
+                    "Ничего не нашлось. Попробуй другое слово или нажми «Обновить»."
+                } else {
+                    "Не загрузилось:\n" + failures.joinToString("\n")
+                }
+            }
         }
     }
 

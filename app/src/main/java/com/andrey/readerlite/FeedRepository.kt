@@ -44,6 +44,9 @@ sealed interface FeedSource {
     val label: String
     val url: String
 
+    /** Откуда грузить. У своих тем два поисковика: если один не пустит, сработает другой. */
+    val urls: List<String> get() = listOf(url)
+
     data class Topic(val topic: NewsTopic) : FeedSource {
         override val key = "t:" + topic.name
         override val label = topic.label
@@ -54,6 +57,7 @@ sealed interface FeedSource {
         override val key = "q:" + query
         override val label = query
         override val url = GoogleNews.searchUrl(query)
+        override val urls = listOf(GoogleNews.searchUrl(query), BingNews.searchUrl(query))
     }
 
     data class Rss(val feedUrl: String) : FeedSource {
@@ -201,16 +205,41 @@ object GoogleNews {
     }
 }
 
+/** Поиск новостей Bing: даёт ленту с картинками и прямыми ссылками на статьи. */
+object BingNews {
+    fun searchUrl(query: String): String =
+        "https://www.bing.com/news/search?q=${URLEncoder.encode(query, "UTF-8")}&format=rss&setlang=ru&cc=ru"
+
+    fun isBing(url: String): Boolean = hostOf(url) == "bing.com"
+
+    /** Ссылка Bing ведёт через переадресацию, настоящий адрес лежит в параметре url=. */
+    fun unwrap(link: String): String {
+        if (!isBing(link)) return link
+        val param = link.substringAfter("url=", "").substringBefore("&")
+        return if (param.isNotEmpty()) java.net.URLDecoder.decode(param, "UTF-8") else link
+    }
+}
+
+/** Понятная причина, почему лента не загрузилась. */
+fun describeError(e: Throwable): String = when (e) {
+    is org.jsoup.HttpStatusException -> "сайт ответил ошибкой ${e.statusCode}"
+    is java.net.SocketTimeoutException -> "не ответил вовремя"
+    is java.net.UnknownHostException -> "нет связи с сайтом"
+    is javax.net.ssl.SSLException -> "ошибка защищённого соединения"
+    else -> e.javaClass.simpleName
+}
+
 object FeedLoader {
 
     /** Загружает RSS или Atom и возвращает новости. */
     fun load(url: String): List<FeedItem> {
-        val doc = Jsoup.connect(url)
-            .userAgent(UA)
+        val connection = Jsoup.connect(url)
             .timeout(15_000)
             .ignoreContentType(true)
             .parser(Parser.xmlParser())
-            .get()
+        // Bing отдаёт RSS только «настольному» браузеру, мобильному — обычную страницу.
+        if (!BingNews.isBing(url)) connection.userAgent(UA)
+        val doc = connection.get()
         val channelTitle = doc.selectFirst("channel > title, feed > title")?.text()?.trim().orEmpty()
         val entries = doc.select("item").ifEmpty { doc.select("entry") }
 
@@ -219,10 +248,12 @@ object FeedLoader {
             val link = e.select("link")
                 .firstOrNull { it.attr("rel").let { r -> r.isEmpty() || r == "alternate" } }
                 ?.let { l -> l.attr("href").ifBlank { l.text() } }
-                ?.trim().orEmpty()
+                ?.trim()
+                ?.let { BingNews.unwrap(it) }
+                .orEmpty()
             if (rawTitle.isEmpty() || link.isEmpty()) return@mapNotNull null
 
-            val sourceEl = e.selectFirst("source")
+            val sourceEl = e.selectFirst("source") ?: e.selectFirst("News|Source")
             val source = sourceEl?.text()?.trim()?.takeIf { it.isNotEmpty() }
                 ?: channelTitle.ifBlank { hostOf(link) }
             // Google дописывает ресурс в конец заголовка: «Заголовок - Forbes.ru».
@@ -233,7 +264,9 @@ object FeedLoader {
                 link = link,
                 source = source,
                 publishedAt = parseDate(e.selectFirst("pubDate, published, updated, dc|date")?.text()),
-                imageUrl = imageOf(e),
+                imageUrl = e.selectFirst("News|Image")?.text()?.takeIf { it.startsWith("http") }
+                    ?.let { "$it&w=800" }
+                    ?: imageOf(e),
                 fromGoogle = GoogleNews.isGoogleLink(link),
             )
         }
