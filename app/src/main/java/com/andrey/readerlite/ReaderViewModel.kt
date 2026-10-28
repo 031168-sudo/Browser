@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
+import android.widget.Toast
 
 /** Тема оформления: как в системе, всегда тёмная или всегда светлая. */
 enum class ThemeMode(val label: String) {
@@ -124,6 +125,48 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             state = ready.copy(saved = newSaved)
+        }
+    }
+
+    /**
+     * Сохранить статью в избранное прямо из ленты, не открывая её:
+     * скачиваем и разбираем статью, чтобы она читалась и без сети.
+     */
+    fun saveForLater(url: String) {
+        val app = getApplication<Application>()
+        viewModelScope.launch {
+            val existing = withContext(Dispatchers.IO) { dao.byUrl(url) }
+            if (existing != null) {
+                setSaved(url, true)
+                return@launch
+            }
+            Toast.makeText(app, "Сохраняю в избранное…", Toast.LENGTH_SHORT).show()
+            val article = withContext(Dispatchers.IO) { runCatching { ArticleExtractor.fetch(url) }.getOrNull() }
+                ?: WebRenderer.render(app, url)?.let { html ->
+                    withContext(Dispatchers.Default) {
+                        runCatching { ArticleExtractor.extract(Jsoup.parse(html, url), url) }.getOrNull()
+                    }
+                }
+            if (article == null) {
+                Toast.makeText(app, "Не удалось сохранить статью", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val now = System.currentTimeMillis()
+            withContext(Dispatchers.IO) {
+                dao.upsert(
+                    ArticleEntity(
+                        url = url,
+                        title = article.title,
+                        siteName = article.siteName,
+                        blocksJson = BlockCodec.encode(article.blocks),
+                        savedAt = now,
+                        // Не открывали — в историю не попадает.
+                        lastOpenedAt = 0L,
+                        saved = true,
+                    )
+                )
+            }
+            Toast.makeText(app, "Сохранено в избранное", Toast.LENGTH_SHORT).show()
         }
     }
 

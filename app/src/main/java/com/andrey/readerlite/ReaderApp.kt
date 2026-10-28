@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -101,6 +102,7 @@ fun ReaderApp(
     feedVm: FeedViewModel = viewModel(),
 ) {
     val prefs = vm.prefs
+    val appScope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableStateOf(Tab.FEED) }
 
     LaunchedEffect(initialUrl) {
@@ -162,10 +164,26 @@ fun ReaderApp(
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
                 when (tab) {
-                    Tab.FEED -> FeedScreen(feedVm, onOpen = { item ->
-                        tab = Tab.READ
-                        vm.openResolving(item.link) { feedVm.realUrl(item) }
-                    })
+                    Tab.FEED -> FeedScreen(
+                        feed = feedVm,
+                        savedUrls = vm.saved.collectAsState().value.map { it.url }.toSet(),
+                        onOpen = { item ->
+                            tab = Tab.READ
+                            vm.openResolving(item.link) { feedVm.realUrl(item) }
+                        },
+                        onToggleSave = { item, isSaved ->
+                            val known = feedVm.savedLinks[item.link]
+                            if (isSaved && known != null) {
+                                vm.setSaved(known, false)
+                            } else {
+                                appScope.launch {
+                                    val real = feedVm.realUrl(item) ?: item.link
+                                    feedVm.rememberSaved(item.link, real)
+                                    vm.saveForLater(real)
+                                }
+                            }
+                        },
+                    )
                     Tab.READ -> ReadScreen(vm)
                     Tab.HISTORY -> ListScreen(
                         emptyText = "История пуста",

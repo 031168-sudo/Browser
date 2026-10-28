@@ -31,7 +31,7 @@ data class ArticleEntity(
 @Dao
 interface ArticleDao {
 
-    @Query("SELECT * FROM articles ORDER BY lastOpenedAt DESC LIMIT 300")
+    @Query("SELECT * FROM articles WHERE lastOpenedAt > 0 ORDER BY lastOpenedAt DESC LIMIT 300")
     fun history(): Flow<List<ArticleEntity>>
 
     @Query("SELECT * FROM articles WHERE saved = 1 ORDER BY savedAt DESC")

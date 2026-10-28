@@ -49,6 +49,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,7 +63,12 @@ import coil.compose.AsyncImage
 /** Вкладка «Лента»: темы-чипы сверху, ниже карточки «картинка + заголовок». */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
+fun FeedScreen(
+    feed: FeedViewModel,
+    savedUrls: Set<String>,
+    onOpen: (FeedItem) -> Unit,
+    onToggleSave: (item: FeedItem, isSaved: Boolean) -> Unit,
+) {
     val visible = feed.visibleItems
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -72,6 +83,15 @@ fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
                         onClick = { feed.select(null) },
                         label = { Text("Всё") },
                     )
+                }
+                if (feed.interests.isNotEmpty()) {
+                    item {
+                        FilterChip(
+                            selected = feed.selected == FeedViewModel.FOR_YOU,
+                            onClick = { feed.select(FeedViewModel.FOR_YOU) },
+                            label = { Text("Для тебя") },
+                        )
+                    }
                 }
                 items(feed.sources, key = { it.key }) { src ->
                     FilterChip(
@@ -116,12 +136,17 @@ fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         ) {
             items(visible, key = { it.link }) { item ->
+                val isSaved = feed.savedLinks[item.link]?.let { it in savedUrls } == true
                 FeedCard(
                     item = item,
                     image = feed.images[item.link],
+                    liked = item.link in feed.liked,
+                    saved = isSaved,
                     onNeedImage = { feed.ensureImage(item) },
                     onOpen = { onOpen(item) },
                     onBlock = { feed.block(item.source) },
+                    onLike = { feed.toggleLike(item) },
+                    onSave = { onToggleSave(item, isSaved) },
                 )
             }
         }
@@ -133,9 +158,13 @@ fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
 private fun FeedCard(
     item: FeedItem,
     image: String?,
+    liked: Boolean,
+    saved: Boolean,
     onNeedImage: () -> Unit,
     onOpen: () -> Unit,
     onBlock: () -> Unit,
+    onLike: () -> List<String>,
+    onSave: () -> Unit,
 ) {
     val context = LocalContext.current
     var menu by remember { mutableStateOf(false) }
@@ -161,12 +190,46 @@ private fun FeedCard(
                 Spacer(Modifier.height(8.dp))
             }
             Text(item.title, fontSize = 18.sp, fontWeight = FontWeight.Medium, lineHeight = 24.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                listOf(item.source, timeAgo(item.publishedAt)).filter { it.isNotEmpty() }.joinToString(" · "),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    listOf(item.source, timeAgo(item.publishedAt)).filter { it.isNotEmpty() }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = {
+                    val words = onLike()
+                    if (words.isNotEmpty()) {
+                        Toast.makeText(
+                            context,
+                            "Буду чаще показывать: " + words.take(4).joinToString(", "),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                }) {
+                    Icon(
+                        if (liked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                        contentDescription = "Интересно",
+                        tint = if (liked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { ShareActions.shareLink(context, item.link, item.title) }) {
+                    Icon(
+                        Icons.Default.Share,
+                        contentDescription = "Поделиться",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = onSave) {
+                    Icon(
+                        if (saved) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                        contentDescription = if (saved) "Убрать из избранного" else "В избранное",
+                        tint = if (saved) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(
@@ -219,6 +282,20 @@ fun FeedSettingsSection(feed: FeedViewModel) {
     Hint("Новости по словам, например «электромобили» или «Подмосковье».")
     feed.queries.sorted().forEach { q -> RemovableRow(q) { feed.removeQuery(q) } }
     AddRow(placeholder = "Новая тема", onAdd = feed::addQuery)
+
+    Spacer(Modifier.height(12.dp))
+    SectionTitle("Мои интересы")
+    if (feed.interests.isEmpty()) {
+        Hint("Пока пусто. Нажимай 👍 «Интересно» на новостях — в ленте появится вкладка «Для тебя».")
+    } else {
+        Hint("Слова из новостей, отмеченных «Интересно». Чем больше число, тем выше такие новости во вкладке «Для тебя».")
+        feed.interests.entries.sortedByDescending { it.value.weight }.take(25).forEach { (stem, interest) ->
+            RemovableRow("${interest.word} · ${"%.1f".format(interest.weight).removeSuffix(",0").removeSuffix(".0")}") {
+                feed.removeInterest(stem)
+            }
+        }
+        TextButton(onClick = feed::resetInterests) { Text("Сбросить интересы") }
+    }
 
     Spacer(Modifier.height(12.dp))
     SectionTitle("Издания")
