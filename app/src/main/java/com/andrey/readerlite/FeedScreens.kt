@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,7 +81,7 @@ fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
                     )
                 }
             }
-            IconButton(onClick = feed::refresh) {
+            IconButton(onClick = { feed.refresh() }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Обновить")
             }
         }
@@ -97,7 +100,18 @@ fun FeedScreen(feed: FeedViewModel, onOpen: (FeedItem) -> Unit) {
             )
         }
 
+        // Запоминаем место в ленте, пока листаешь (с небольшой задержкой, чтобы не писать на каждый пиксель).
+        LaunchedEffect(feed.listState) {
+            snapshotFlow {
+                feed.listState.firstVisibleItemIndex to feed.listState.firstVisibleItemScrollOffset
+            }.collectLatest { (index, offset) ->
+                delay(400)
+                feed.savePosition(index, offset)
+            }
+        }
+
         LazyColumn(
+            state = feed.listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         ) {

@@ -5,7 +5,11 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.setValue
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -70,16 +74,47 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
             return items.filter { it.source.lowercase() !in hidden }
         }
 
+    /** Прокрутка ленты живёт здесь, а не в экране: так она не сбрасывается при смене вкладки. */
+    val listState: LazyListState
+
     init {
-        refresh()
+        // Сначала показываем ленту, сохранённую в прошлый раз, и возвращаемся
+        // к той новости, на которой остановился. Потом тихо подгружаем свежие:
+        // список привязан к новостям, а не к номерам строк, поэтому место не сдвинется.
+        val cached = loadCache()
+        items = cached
+        cached.forEach { item -> item.imageUrl?.let { images[item.link] = it } }
+        selected = store.getString(KEY_SELECTED, null)
+        val anchor = store.getString(KEY_ANCHOR, null)
+        val index = visibleItems.indexOfFirst { it.link == anchor }
+        listState = if (index >= 0) {
+            LazyListState(index, store.getInt(KEY_OFFSET, 0))
+        } else {
+            LazyListState()
+        }
+        refresh(toTop = false)
     }
 
     fun select(key: String?) {
         selected = key
+        store.edit().putString(KEY_SELECTED, key).apply()
         refresh()
     }
 
-    fun refresh() {
+    /** Запоминает новость, которая сейчас вверху экрана, и сдвиг внутри неё. */
+    fun savePosition(index: Int, offset: Int) {
+        val link = visibleItems.getOrNull(index)?.link ?: return
+        store.edit().putString(KEY_ANCHOR, link).putInt(KEY_OFFSET, offset).apply()
+    }
+
+    /** Сохраняет ленту вместе с найденными картинками, чтобы после перезапуска показать её сразу. */
+    fun persist() {
+        val snapshot = items.map { it.copy(imageUrl = images[it.link] ?: it.imageUrl) }
+        viewModelScope.launch(Dispatchers.IO) { saveCache(snapshot) }
+    }
+
+    /** toTop = true: после обновления показать ленту с начала (кнопка «Обновить», смена темы). */
+    fun refresh(toTop: Boolean = true) {
         loadJob?.cancel()
         val all = sources
         val list = selected?.let { key -> all.filter { it.key == key } }?.ifEmpty { null } ?: all
@@ -103,6 +138,8 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
             merged.forEach { item -> item.imageUrl?.let { images[item.link] = it } }
             items = merged
             loading = false
+            if (toTop && merged.isNotEmpty()) listState.scrollToItem(0)
+            withContext(Dispatchers.IO) { saveCache(merged) }
             if (merged.isEmpty()) error = "Новости не загрузились. Проверь интернет и нажми «Обновить»."
         }
     }
@@ -178,6 +215,45 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         store.edit().putStringSet(key, HashSet(value)).apply()
     }
 
+    private fun cacheFile() = File(getApplication<Application>().filesDir, "feed_cache.json")
+
+    private fun saveCache(list: List<FeedItem>) {
+        try {
+            val array = JSONArray()
+            list.forEach { item ->
+                array.put(
+                    JSONObject()
+                        .put("title", item.title)
+                        .put("link", item.link)
+                        .put("source", item.source)
+                        .put("time", item.publishedAt)
+                        .put("image", item.imageUrl ?: images[item.link] ?: "")
+                        .put("google", item.fromGoogle)
+                )
+            }
+            cacheFile().writeText(array.toString())
+        } catch (e: Exception) {
+            // Не получилось сохранить — не страшно, лента просто загрузится заново.
+        }
+    }
+
+    private fun loadCache(): List<FeedItem> = try {
+        val array = JSONArray(cacheFile().readText())
+        (0 until array.length()).map { i ->
+            val o = array.getJSONObject(i)
+            FeedItem(
+                title = o.getString("title"),
+                link = o.getString("link"),
+                source = o.getString("source"),
+                publishedAt = o.getLong("time"),
+                imageUrl = o.optString("image").ifBlank { null },
+                fromGoogle = o.optBoolean("google"),
+            )
+        }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     private fun normalizeTitle(t: String) = t.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
 
     companion object {
@@ -185,6 +261,9 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_QUERIES = "queries"
         private const val KEY_RSS = "rss"
         private const val KEY_BLOCKED = "blocked"
+        private const val KEY_SELECTED = "selected"
+        private const val KEY_ANCHOR = "anchor"
+        private const val KEY_OFFSET = "offset"
         private const val MAX_ITEMS = 150
         private val DEFAULT_TOPICS = setOf("TOP", "TECHNOLOGY", "SCIENCE")
     }
