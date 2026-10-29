@@ -196,7 +196,7 @@ class InterestEngine private constructor(private val file: File) {
         save()
     }
 
-    fun setCoef(c: Coefficients) {
+    fun updateCoef(c: Coefficients) {
         coef = c
         save()
     }

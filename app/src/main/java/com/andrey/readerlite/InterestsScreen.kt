@@ -155,10 +155,10 @@ fun InterestsScreen(engine: InterestEngine, onBack: () -> Unit) {
                 Section("Сколько весит действие")
                 Hint("Чем больше число, тем сильнее действие меняет интересы.")
                 val c = engine.coef
-                CoefSlider("Прочитал новость из ленты", c.read) { engine.setCoef(c.copy(read = it)) }
-                CoefSlider("Открыл статью из другого приложения и прочитал", c.external) { engine.setCoef(c.copy(external = it)) }
-                CoefSlider("Добавил в избранное", c.save) { engine.setCoef(c.copy(save = it)) }
-                CoefSlider("Нажал «Интересно»", c.like) { engine.setCoef(c.copy(like = it)) }
+                CoefSlider("Прочитал новость из ленты", c.read) { engine.updateCoef(c.copy(read = it)) }
+                CoefSlider("Открыл статью из другого приложения и прочитал", c.external) { engine.updateCoef(c.copy(external = it)) }
+                CoefSlider("Добавил в избранное", c.save) { engine.updateCoef(c.copy(save = it)) }
+                CoefSlider("Нажал «Интересно»", c.like) { engine.updateCoef(c.copy(like = it)) }
                 Hint("Прочтение засчитывается, если статья была открыта хотя бы 15 секунд; дочитанная до конца весит больше.")
             }
 
