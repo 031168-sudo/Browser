@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 @Composable
 fun FeedScreen(
     feed: FeedViewModel,
+    onOpenInterests: () -> Unit,
     savedUrls: Set<String>,
     onOpen: (FeedItem) -> Unit,
     onToggleSave: (item: FeedItem, isSaved: Boolean) -> Unit,
@@ -84,7 +85,7 @@ fun FeedScreen(
                         label = { Text("Всё") },
                     )
                 }
-                if (feed.interests.isNotEmpty()) {
+                if (feed.hasInterests) {
                     item {
                         FilterChip(
                             selected = feed.selected == FeedViewModel.FOR_YOU,
@@ -110,6 +111,12 @@ fun FeedScreen(
             LinearProgressIndicator(Modifier.fillMaxWidth())
         } else {
             Spacer(Modifier.height(4.dp))
+        }
+
+        if (feed.selected == FeedViewModel.FOR_YOU) {
+            TextButton(onClick = onOpenInterests, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text("Подобрано по твоим интересам · настроить ›")
+            }
         }
 
         feed.error?.let {
@@ -263,7 +270,7 @@ private fun timeAgo(millis: Long): String {
 
 /** Раздел настроек ленты: темы, свои темы, свои сайты, скрытые ресурсы. */
 @Composable
-fun FeedSettingsSection(feed: FeedViewModel) {
+fun FeedSettingsSection(feed: FeedViewModel, onOpenInterests: () -> Unit) {
     SectionTitle("Темы ленты")
     NewsTopic.entries.forEach { topic ->
         Row(
@@ -284,18 +291,26 @@ fun FeedSettingsSection(feed: FeedViewModel) {
     AddRow(placeholder = "Новая тема", onAdd = feed::addQuery)
 
     Spacer(Modifier.height(12.dp))
-    SectionTitle("Мои интересы")
-    if (feed.interests.isEmpty()) {
-        Hint("Пока пусто. Нажимай 👍 «Интересно» на новостях — в ленте появится вкладка «Для тебя».")
-    } else {
-        Hint("Слова из новостей, отмеченных «Интересно». Чем больше число, тем выше такие новости во вкладке «Для тебя».")
-        feed.interests.entries.sortedByDescending { it.value.weight }.take(25).forEach { (stem, interest) ->
-            RemovableRow("${interest.word} · ${"%.1f".format(interest.weight).removeSuffix(",0").removeSuffix(".0")}") {
-                feed.removeInterest(stem)
-            }
+    // Интересы — в отдельном окне, чтобы не раздувать настройки.
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenInterests)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Мои интересы", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (feed.hasInterests) "Слов и тем: ${feed.engine.terms.size}. Посмотреть и поправить веса"
+                else "Пока пусто — заполнится, когда будешь читать",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        TextButton(onClick = feed::resetInterests) { Text("Сбросить интересы") }
+        Text("›", style = MaterialTheme.typography.headlineSmall)
     }
+    HorizontalDivider()
 
     Spacer(Modifier.height(12.dp))
     SectionTitle("Издания")

@@ -108,6 +108,9 @@ fun ReaderApp(
     val prefs = vm.prefs
     val appScope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableStateOf(Tab.FEED) }
+    // Отдельное окно «Мои интересы» поверх вкладок; «Назад» закрывает его.
+    var showInterests by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showInterests) { showInterests = false }
 
     LaunchedEffect(initialUrl) {
         if (!initialUrl.isNullOrBlank()) {
@@ -130,7 +133,7 @@ fun ReaderApp(
                     Tab.entries.forEach { item ->
                         NavigationBarItem(
                             selected = tab == item,
-                            onClick = { tab = item },
+                            onClick = { tab = item; showInterests = false },
                             icon = {
                                 Icon(
                                     imageVector = when (item) {
@@ -167,13 +170,16 @@ fun ReaderApp(
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                when (tab) {
+                if (showInterests) {
+                    InterestsScreen(feedVm.engine, onBack = { showInterests = false })
+                } else when (tab) {
                     Tab.FEED -> FeedScreen(
                         feed = feedVm,
+                        onOpenInterests = { showInterests = true },
                         savedUrls = vm.saved.collectAsState().value.map { it.url }.toSet(),
                         onOpen = { item ->
                             tab = Tab.READ
-                            vm.openResolving(item.link) { feedVm.realUrl(item) }
+                            vm.openResolving(item.link, item.source, item.topic) { feedVm.realUrl(item) }
                         },
                         onToggleSave = { item, isSaved ->
                             val known = feedVm.savedLinks[item.link]
@@ -183,7 +189,7 @@ fun ReaderApp(
                                 appScope.launch {
                                     val real = feedVm.realUrl(item) ?: item.link
                                     feedVm.rememberSaved(item.link, real)
-                                    vm.saveForLater(real)
+                                    vm.saveForLater(real, item.topic)
                                 }
                             }
                         },
@@ -213,7 +219,7 @@ fun ReaderApp(
                         },
                         headerAction = null,
                     )
-                    Tab.SETTINGS -> SettingsScreen(vm, feedVm)
+                    Tab.SETTINGS -> SettingsScreen(vm, feedVm, onOpenInterests = { showInterests = true })
                 }
             }
         }
@@ -299,9 +305,7 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel, f
     val likeButton: @Composable () -> Unit = {
         val ctx = androidx.compose.ui.platform.LocalContext.current
         OutlinedButton(onClick = {
-            val words = feedVm.toggleLike(
-                FeedItem(article.title, article.url, article.siteName, 0L, null, false)
-            )
+            val words = vm.toggleLikeArticle(article)
             if (words.isNotEmpty()) {
                 android.widget.Toast.makeText(
                     ctx,
@@ -323,8 +327,28 @@ private fun ArticleView(article: Article, saved: Boolean, vm: ReaderViewModel, f
     val context = androidx.compose.ui.platform.LocalContext.current
     val family = if (prefs.serif) FontFamily.Serif else FontFamily.Default
 
+    // Сколько читал и докуда долистал — для учёта интересов, когда статья закроется.
+    val listState = remember(article.url) { androidx.compose.foundation.lazy.LazyListState() }
+    var maxProgress by remember(article.url) { mutableStateOf(0.0) }
+    LaunchedEffect(article.url) {
+        androidx.compose.runtime.snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            if (info.totalItemsCount > 0) (last + 1).toDouble() / info.totalItemsCount else 0.0
+        }.collect { p -> if (p > maxProgress) maxProgress = p }
+    }
+    val currentProgress by androidx.compose.runtime.rememberUpdatedState(maxProgress)
+    androidx.compose.runtime.DisposableEffect(article.url) {
+        val started = android.os.SystemClock.elapsedRealtime()
+        onDispose {
+            // Не больше 10 минут: если ушёл из приложения со статьёй на экране, время не копится.
+            val seconds = minOf((android.os.SystemClock.elapsedRealtime() - started) / 1000, 600)
+            vm.onArticleRead(article, seconds, currentProgress)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState) {
         item {
             Text(
                 article.title,
@@ -534,7 +558,7 @@ private fun ClearHistoryButton(onClear: () -> Unit) {
 }
 
 @Composable
-private fun SettingsScreen(vm: ReaderViewModel, feedVm: FeedViewModel) {
+private fun SettingsScreen(vm: ReaderViewModel, feedVm: FeedViewModel, onOpenInterests: () -> Unit) {
     val prefs = vm.prefs
     Column(
         Modifier
@@ -584,7 +608,7 @@ private fun SettingsScreen(vm: ReaderViewModel, feedVm: FeedViewModel) {
         )
 
         HorizontalDivider(Modifier.padding(vertical = 12.dp))
-        FeedSettingsSection(feedVm)
+        FeedSettingsSection(feedVm, onOpenInterests)
         Spacer(Modifier.height(24.dp))
         Text(
             "Всё хранится только на этом телефоне. Облака и синхронизации нет.",

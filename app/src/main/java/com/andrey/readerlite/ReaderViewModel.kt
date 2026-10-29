@@ -55,19 +55,31 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     var prefs: ReaderPrefs by mutableStateOf(loadPrefs())
         private set
 
+    /** Профиль интересов: чтение, избранное и «Интересно» пополняют его. */
+    val interests = InterestEngine.get(app)
+
+    /** Откуда открыта текущая статья — от этого зависит вес прочтения. */
+    private data class Origin(val kind: ReadKind, val source: String, val category: String)
+    private var origin = Origin(ReadKind.EXTERNAL, "", "")
+
     /**
      * Открыть новость из ленты: сначала узнаём настоящий адрес статьи
      * (у Google Новостей ссылка — переадресация), потом открываем как обычно.
      */
-    fun openResolving(link: String, resolve: suspend () -> String?) {
+    fun openResolving(link: String, source: String, category: String, resolve: suspend () -> String?) {
         state = UiState.Loading("Открываю новость…")
+        val feedOrigin = Origin(ReadKind.FEED, source, category)
         viewModelScope.launch {
             val real = runCatching { resolve() }.getOrNull()
-            open(real ?: link)
+            open(real ?: link, feedOrigin)
         }
     }
 
-    fun open(rawUrl: String) {
+    /** Открыть по ссылке. Без [from] считаем, что ссылку дали извне (вставил или «Поделиться»). */
+    fun open(rawUrl: String) = open(rawUrl, null)
+
+    private fun open(rawUrl: String, from: Origin?) {
+        origin = from ?: Origin(ReadKind.EXTERNAL, "", "")
         val url = normalizeUrl(rawUrl)
         if (url == null) {
             state = UiState.Error("Похоже, это не ссылка. Вставь адрес, который начинается с https://")
@@ -103,6 +115,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openCached(entity: ArticleEntity) {
+        origin = Origin(ReadKind.REREAD, "", "")
         state = UiState.Ready(entity.toArticle(), entity.saved)
         viewModelScope.launch(Dispatchers.IO) {
             dao.upsert(entity.copy(lastOpenedAt = System.currentTimeMillis()))
@@ -125,14 +138,35 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             state = ready.copy(saved = newSaved)
+            val a = ready.article
+            if (newSaved) interests.learnSave(a.url, a.title, a.plainText(), a.siteName, origin.category)
+            else interests.revertSave(a.url)
         }
     }
+
+    /** Закрыл статью: если читал хотя бы 15 секунд, учитываем в интересах. */
+    fun onArticleRead(article: Article, seconds: Long, progress: Double) {
+        if (seconds < 15) return
+        interests.learnRead(
+            url = article.url,
+            title = article.title,
+            body = article.plainText(),
+            source = origin.source.ifBlank { article.siteName },
+            category = origin.category,
+            kind = origin.kind,
+            progress = progress,
+        )
+    }
+
+    /** «Интересно» внутри статьи: оцениваем уже по всему тексту. */
+    fun toggleLikeArticle(article: Article): List<String> =
+        interests.toggleLike(article.url, article.title, article.plainText(), article.siteName, origin.category)
 
     /**
      * Сохранить статью в избранное прямо из ленты, не открывая её:
      * скачиваем и разбираем статью, чтобы она читалась и без сети.
      */
-    fun saveForLater(url: String) {
+    fun saveForLater(url: String, category: String = "") {
         val app = getApplication<Application>()
         viewModelScope.launch {
             val existing = withContext(Dispatchers.IO) { dao.byUrl(url) }
@@ -166,6 +200,7 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             }
+            interests.learnSave(url, article.title, article.plainText(), article.siteName, category)
             Toast.makeText(app, "Сохранено в избранное", Toast.LENGTH_SHORT).show()
         }
     }
@@ -173,14 +208,23 @@ class ReaderViewModel(app: Application) : AndroidViewModel(app) {
     /** Сохранить или убрать статью из списка (история, избранное). */
     fun setSaved(url: String, saved: Boolean) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                val existing = dao.byUrl(url) ?: return@withContext
+            val existing = withContext(Dispatchers.IO) {
+                val existing = dao.byUrl(url) ?: return@withContext null
                 dao.upsert(
                     existing.copy(
                         saved = saved,
                         savedAt = if (saved) System.currentTimeMillis() else existing.savedAt,
                     )
                 )
+                existing
+            }
+            if (existing != null) {
+                if (saved) {
+                    val a = existing.toArticle()
+                    interests.learnSave(url, a.title, a.plainText(), a.siteName, "")
+                } else {
+                    interests.revertSave(url)
+                }
             }
             // Если эта же статья сейчас открыта, обновляем и её кнопку.
             val ready = state as? UiState.Ready
@@ -264,3 +308,14 @@ fun ArticleEntity.toArticle(): Article = Article(
     siteName = siteName,
     blocks = BlockCodec.decode(blocksJson),
 )
+
+/** Текст статьи без картинок и кода — для анализа интересов. */
+fun Article.plainText(): String = blocks.mapNotNull { b ->
+    when (b) {
+        is Block.Heading -> b.text
+        is Block.Paragraph -> b.text
+        is Block.Quote -> b.text
+        is Block.ListItem -> b.text
+        else -> null
+    }
+}.joinToString("\n")

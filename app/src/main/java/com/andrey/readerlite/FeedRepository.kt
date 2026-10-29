@@ -23,6 +23,8 @@ data class FeedItem(
     /** Картинка, если лента сама её дала. Для Google Новостей подбирается отдельно. */
     val imageUrl: String?,
     val fromGoogle: Boolean,
+    /** Рубрика, из которой пришла новость («Технологии», «Авто»…). Нужна для интересов. */
+    val topic: String = "",
 )
 
 /** Готовые темы Google Новостей. */
@@ -118,6 +120,14 @@ object RssCatalog {
     private val byUrl = groups.flatMap { it.second }.associateBy { it.url }
 
     fun nameFor(url: String): String? = byUrl[url]?.name
+
+    /** Рубрика издания в терминах тем Google, чтобы интересы по рубрикам складывались. */
+    fun categoryFor(url: String): String = when (groups.firstOrNull { (_, list) -> list.any { it.url == url } }?.first) {
+        "Техника и наука" -> "Технологии"
+        "Авто" -> "Авто"
+        "Спорт" -> "Спорт"
+        else -> ""
+    }
     fun isPreset(url: String): Boolean = url in byUrl
 }
 

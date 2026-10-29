@@ -13,8 +13,8 @@ android {
         applicationId = "com.andrey.readerlite"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.18.0"
+        versionCode = 19
+        versionName = "0.19.0"
     }
 
     // Постоянный ключ: все сборки подписаны одинаково, поэтому новые версии

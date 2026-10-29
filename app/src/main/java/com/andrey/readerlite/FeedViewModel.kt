@@ -55,16 +55,14 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
     var error: String? by mutableStateOf(null)
         private set
 
-    /** Профиль интересов: основа слова → слово и вес. Растёт от кнопки «Интересно». */
-    var interests: Map<String, Interest> by mutableStateOf(loadInterests())
-        private set
+    /** Профиль интересов — общий для ленты, читалки и избранного. */
+    val engine = InterestEngine.get(app)
 
-    /** Вес изданий в профиле интересов. */
-    private var sourceWeights: Map<String, Double> = loadSourceWeights()
+    /** Есть ли что-то в профиле интересов (тогда показываем вкладку «Для тебя»). */
+    val hasInterests: Boolean get() = engine.terms.isNotEmpty() || engine.categories.isNotEmpty()
 
-    /** Новости, отмеченные «Интересно» (ссылки). */
-    var liked: Set<String> by mutableStateOf(store.getStringSet(KEY_LIKED, null)?.toSet() ?: emptySet())
-        private set
+    /** Отмеченные «Интересно» (ссылки новостей и адреса статей). */
+    val liked: Set<String> get() = engine.liked
 
     /** Новости, сохранённые в избранное из ленты: ссылка в ленте → адрес статьи. */
     var savedLinks: Map<String, String> by mutableStateOf(loadSavedLinks())
@@ -110,50 +108,13 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         refresh(toTop = false)
     }
 
-    /** «Интересно»: запоминаем слова заголовка и издание. Повторное нажатие — отменить. */
-    fun toggleLike(item: FeedItem): List<String> {
-        val words = Keywords.extract(item.title)
-        val add = item.link !in liked
-        val delta = if (add) 1.0 else -1.0
-        val updated = interests.toMutableMap()
-        words.forEach { (stem, word) ->
-            val old = updated[stem]
-            val weight = (old?.weight ?: 0.0) + delta
-            if (weight <= 0.01) updated.remove(stem) else updated[stem] = Interest(old?.word ?: word, weight)
-        }
-        interests = updated
-        val sw = sourceWeights.toMutableMap()
-        val newSource = (sw[item.source] ?: 0.0) + delta * 0.5
-        if (newSource <= 0.01) sw.remove(item.source) else sw[item.source] = newSource
-        sourceWeights = sw
-        liked = if (add) liked + item.link else liked - item.link
-        saveInterests()
-        return if (add) words.map { it.second } else emptyList()
-    }
+    /** «Интересно» на карточке ленты: статья ещё не прочитана, судим по заголовку. */
+    fun toggleLike(item: FeedItem): List<String> =
+        engine.toggleLike(item.link, item.title, "", item.source, item.topic)
 
-    fun removeInterest(stem: String) {
-        interests = interests - stem
-        saveInterests()
-    }
+    fun score(item: FeedItem): Double = engine.score(item.title, item.source, item.topic)
 
-    fun resetInterests() {
-        interests = emptyMap()
-        sourceWeights = emptyMap()
-        liked = emptySet()
-        saveInterests()
-        if (selected == FOR_YOU) select(null)
-    }
-
-    /** Насколько новость похожа на то, что отмечено «Интересно». 0 — совсем не похожа. */
-    fun score(item: FeedItem): Double {
-        val words = Keywords.extract(item.title).sumOf { (stem, _) -> interests[stem]?.weight ?: 0.0 }
-        if (words <= 0.0) return 0.0
-        return words + 0.3 * (sourceWeights[item.source] ?: 0.0)
-    }
-
-    /** Самые весомые слова — по ним «Для тебя» дополнительно ищет новости. */
-    private fun topWords(n: Int): List<String> =
-        interests.values.sortedByDescending { it.weight }.take(n).map { it.word }
+    private fun topWords(n: Int): List<String> = engine.topSearchLabels(n)
 
     fun rememberSaved(link: String, articleUrl: String) {
         savedLinks = savedLinks + (link to articleUrl)
@@ -182,7 +143,7 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh(toTop: Boolean = true) {
         loadJob?.cancel()
         val all = sources
-        val forYou = selected == FOR_YOU && interests.isNotEmpty()
+        val forYou = selected == FOR_YOU && hasInterests
         val list = when {
             forYou -> all + topWords(3).map { FeedSource.Query(it) }
             else -> selected?.let { key -> all.filter { it.key == key } }?.ifEmpty { null } ?: all
@@ -213,11 +174,18 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
                         // Новости изданий из готового списка подписываем его названием,
                         // чтобы скрытие ресурса работало одинаково.
                         val presetName = (src as? FeedSource.Rss)?.let { RssCatalog.nameFor(it.feedUrl) }
-                        if (presetName != null) loaded.map { it.copy(source = presetName) } else loaded
+                        // Запоминаем рубрику: по ней тоже учитываются интересы.
+                        val topic = when (src) {
+                            is FeedSource.Topic -> if (src.topic == NewsTopic.TOP) "" else src.label
+                            is FeedSource.Rss -> RssCatalog.categoryFor(src.feedUrl)
+                            is FeedSource.Query -> ""
+                        }
+                        loaded.map { it.copy(source = presetName ?: it.source, topic = topic) }
                     }
                 }.awaitAll()
             }
             val unique = results.flatten().distinctBy { normalizeTitle(it.title) }
+            engine.observeTitles(unique.map { it.title })
             val merged = if (forYou) {
                 // «Для тебя»: только похожие на отмеченные, самые похожие сверху.
                 unique.map { it to score(it) }
@@ -322,33 +290,6 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         store.edit().putStringSet(key, HashSet(value)).apply()
     }
 
-    private fun saveInterests() {
-        val words = JSONObject()
-        interests.forEach { (stem, i) -> words.put(stem, JSONObject().put("w", i.word).put("v", i.weight)) }
-        store.edit()
-            .putString(KEY_INTERESTS, words.toString())
-            .putString(KEY_SOURCE_WEIGHTS, JSONObject(sourceWeights).toString())
-            .putStringSet(KEY_LIKED, HashSet(liked))
-            .apply()
-    }
-
-    private fun loadInterests(): Map<String, Interest> = try {
-        val o = JSONObject(store.getString(KEY_INTERESTS, "{}") ?: "{}")
-        o.keys().asSequence().associateWith { k ->
-            val v = o.getJSONObject(k)
-            Interest(v.getString("w"), v.getDouble("v"))
-        }
-    } catch (e: Exception) {
-        emptyMap()
-    }
-
-    private fun loadSourceWeights(): Map<String, Double> = try {
-        val o = JSONObject(store.getString(KEY_SOURCE_WEIGHTS, "{}") ?: "{}")
-        o.keys().asSequence().associateWith { o.getDouble(it) }
-    } catch (e: Exception) {
-        emptyMap()
-    }
-
     private fun loadSavedLinks(): Map<String, String> = try {
         val o = JSONObject(store.getString(KEY_SAVED_LINKS, "{}") ?: "{}")
         o.keys().asSequence().associateWith { o.getString(it) }
@@ -370,6 +311,7 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
                         .put("time", item.publishedAt)
                         .put("image", item.imageUrl ?: images[item.link] ?: "")
                         .put("google", item.fromGoogle)
+                        .put("topic", item.topic)
                 )
             }
             cacheFile().writeText(array.toString())
@@ -389,6 +331,7 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
                 publishedAt = o.getLong("time"),
                 imageUrl = o.optString("image").ifBlank { null },
                 fromGoogle = o.optBoolean("google"),
+                topic = o.optString("topic"),
             )
         }
     } catch (e: Exception) {
@@ -403,9 +346,6 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_RSS = "rss"
         private const val KEY_BLOCKED = "blocked"
         private const val KEY_SELECTED = "selected"
-        private const val KEY_INTERESTS = "interests"
-        private const val KEY_SOURCE_WEIGHTS = "source_weights"
-        private const val KEY_LIKED = "liked"
         private const val KEY_SAVED_LINKS = "saved_links"
         const val FOR_YOU = "foryou"
         private const val KEY_ANCHOR = "anchor"

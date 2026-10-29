@@ -43,7 +43,15 @@ jobs:
           if [ -n "$FAIL" ]; then echo "::warning title=Feed check failed::$FAIL"; fi
 
       - name: Build release APK
-        run: gradle :app:assembleRelease --no-daemon
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --no-daemon 2>&1 | tee build.log
+
+      - name: Report build errors
+        if: failure()
+        run: |
+          MSG=$(grep -E '^e: |error:|What went wrong' -A2 build.log | head -40 | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Build errors::${MSG:-нет текста ошибки}"
 
       - name: Publish GitHub release with APK
         env:
