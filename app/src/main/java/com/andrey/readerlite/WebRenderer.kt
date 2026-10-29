@@ -30,7 +30,11 @@ object WebRenderer {
         val webView = createWebView(context)
         try {
             // Ждём первой загрузки, но не дольше 20 секунд.
-            withTimeoutOrNull(20_000) { loadAndWait(webView, url) }
+            var failed = false
+            withTimeoutOrNull(20_000) { loadAndWait(webView, url) { failed = true } }
+            // Страница не открылась (нет сети, сайт недоступен и т. п.) — у WebView
+            // на экране своя страница ошибки, выдавать её за статью нельзя.
+            if (failed) return@withContext null
 
             // Страница могла ещё догружать текст скриптами или пройти проверку на бота
             // и перейти дальше. Ждём, пока длина текста перестанет расти (до ~15 секунд).
@@ -42,6 +46,7 @@ object WebRenderer {
                 delay(750)
             }
 
+            if (failed) return@withContext null
             decodeJsString(evaluate(webView, HTML_JS))
         } finally {
             webView.stopLoading()
@@ -59,11 +64,23 @@ object WebRenderer {
         layout(0, 0, 1080, 2400)
     }
 
-    private suspend fun loadAndWait(webView: WebView, url: String) =
+    private suspend fun loadAndWait(webView: WebView, url: String, onMainFrameError: () -> Unit) =
         suspendCancellableCoroutine<Unit> { cont ->
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, finishedUrl: String) {
                     if (cont.isActive) cont.resume(Unit)
+                }
+
+                override fun onReceivedError(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest,
+                    error: android.webkit.WebResourceError,
+                ) {
+                    // Ошибки картинок и счётчиков не важны, важна только сама страница.
+                    if (request.isForMainFrame) {
+                        onMainFrameError()
+                        if (cont.isActive) cont.resume(Unit)
+                    }
                 }
             }
             webView.loadUrl(url)
