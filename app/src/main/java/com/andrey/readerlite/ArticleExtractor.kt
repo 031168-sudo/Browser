@@ -36,16 +36,22 @@ object ArticleExtractor {
 
     /** Скачивает страницу и возвращает статью. Бросает исключение при сетевой ошибке. */
     fun fetch(url: String): Article {
-        val doc = Jsoup.connect(url)
+        val connection = Jsoup.connect(url)
             .userAgent(USER_AGENT)
             .timeout(20_000)
             .followRedirects(true)
-            .get()
-        return extract(doc, url)
+        if (hostOf(url).endsWith("google.com")) connection.cookies(GoogleNews.CONSENT_COOKIES)
+        val doc = connection.get()
+        return extract(doc, doc.location().ifBlank { url })
     }
 
     fun extract(doc: Document, pageUrl: String): Article {
         val title = pickTitle(doc)
+        if (GoogleNews.isConsentPage(doc.location().ifBlank { pageUrl }, doc.title()) ||
+            GoogleNews.isConsentPage(pageUrl, title)
+        ) {
+            throw IllegalStateException("Google показал страницу согласия вместо статьи")
+        }
         val siteName = doc.select("meta[property=og:site_name]").attr("content").trim()
             .ifBlank { hostOf(pageUrl) }
 

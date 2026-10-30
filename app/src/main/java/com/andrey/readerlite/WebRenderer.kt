@@ -83,6 +83,13 @@ object WebRenderer {
                     }
                 }
             }
+            // Согласие на cookies Google, чтобы не попасть на «Before you continue to Google».
+            val cookies = android.webkit.CookieManager.getInstance()
+            listOf("https://news.google.com", "https://www.google.com", "https://consent.google.com").forEach { site ->
+                GoogleNews.CONSENT_COOKIES.forEach { (name, value) ->
+                    cookies.setCookie(site, "$name=$value; Domain=.google.com; Path=/; Secure")
+                }
+            }
             webView.loadUrl(url)
         }
 

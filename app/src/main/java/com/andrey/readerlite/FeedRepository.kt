@@ -154,6 +154,21 @@ fun hostOf(url: String): String = try {
 object GoogleNews {
     private const val LOCALE = "hl=ru&gl=RU&ceid=RU:ru"
 
+    /**
+     * Cookies «согласие дано». Без них посетителю из Европы (например, через VPN)
+     * Google вместо данных показывает страницу «Before you continue to Google».
+     */
+    val CONSENT_COOKIES = mapOf(
+        "CONSENT" to "YES+cb.20240101-00-p0.ru+FX+000",
+        "SOCS" to "CAESEwgDEgk0ODE3Nzk3MjQaAmVuIAEaBgiA_LyaBg",
+    )
+
+    /** Страница согласия Google — это не статья. */
+    fun isConsentPage(url: String, title: String): Boolean =
+        hostOf(url).startsWith("consent.") ||
+            title.startsWith("Before you continue to Google") ||
+            title.startsWith("Прежде чем перейти к Google")
+
     fun topicUrl(topic: NewsTopic): String =
         if (topic.section == null) "https://news.google.com/rss?$LOCALE"
         else "https://news.google.com/rss/headlines/section/topic/${topic.section}?$LOCALE"
@@ -195,7 +210,7 @@ object GoogleNews {
 
     private fun newStyle(id: String): String? {
         val page = Jsoup.connect("https://news.google.com/articles/$id")
-            .userAgent(UA).timeout(15_000).get()
+            .userAgent(UA).cookies(CONSENT_COOKIES).timeout(15_000).get()
         val div = page.selectFirst("c-wiz > div[jscontroller]") ?: page.selectFirst("[data-n-a-sg]")
             ?: return null
         val signature = div.attr("data-n-a-sg")
@@ -208,6 +223,7 @@ object GoogleNews {
 
         val body = Jsoup.connect("https://news.google.com/_/DotsSplashUi/data/batchexecute")
             .userAgent(UA)
+            .cookies(CONSENT_COOKIES)
             .timeout(15_000)
             .ignoreContentType(true)
             .header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8")
@@ -260,6 +276,7 @@ object FeedLoader {
             .parser(Parser.xmlParser())
         // Bing отдаёт RSS только «настольному» браузеру, мобильному — обычную страницу.
         if (!BingNews.isBing(url)) connection.userAgent(UA)
+        if (GoogleNews.isGoogleLink(url)) connection.cookies(GoogleNews.CONSENT_COOKIES)
         val doc = connection.get()
         val channelTitle = doc.selectFirst("channel > title, feed > title")?.text()?.trim().orEmpty()
         val entries = doc.select("item").ifEmpty { doc.select("entry") }
