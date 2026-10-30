@@ -17,9 +17,9 @@ jobs:
           gradle-version: 8.14.3
       - name: Run feed tests
         continue-on-error: true
-        run: gradle :app:testReleaseUnitTest --no-daemon --tests '*SearchCheckTest*'
+        run: gradle :app:testReleaseUnitTest --no-daemon --tests '*SearchCheckTest*' --tests '*FeedLiveTest*'
       - name: Report
         if: always()
         run: |
-          MSG=$(grep -ho 'FEED src[^<]*' app/build/test-results/testReleaseUnitTest/*.xml 2>/dev/null | sed ':a;N;$!ba;s/\n/%0A/g')
+          MSG=$(grep -ho 'FEED[^<]*' app/build/test-results/testReleaseUnitTest/*.xml 2>/dev/null | sed ':a;N;$!ba;s/\n/%0A/g')
           echo "::notice title=Feed sources::${MSG:-нет вывода}"
