@@ -55,8 +55,7 @@ sealed interface FeedSource {
     data class Topic(val topic: NewsTopic) : FeedSource {
         override val key = "t:" + topic.name
         override val label = topic.label
-        override val url = GoogleNews.topicUrl(topic)
-        override val fallbackUrl = BingNews.searchUrl(
+        private val bingUrl = BingNews.searchUrl(
             when (topic) {
                 NewsTopic.TOP -> "главные новости"
                 NewsTopic.NATION -> "новости России"
@@ -64,13 +63,17 @@ sealed interface FeedSource {
                 else -> topic.label
             }
         )
+        override val url: String get() = if (NewsEngine.bing) bingUrl else GoogleNews.topicUrl(topic)
+        override val fallbackUrl: String? get() = if (NewsEngine.bing) null else bingUrl
     }
 
     data class Query(val query: String) : FeedSource {
         override val key = "q:" + query
         override val label = query
-        override val url = GoogleNews.searchUrl(query)
-        override val urls = listOf(GoogleNews.searchUrl(query), BingNews.searchUrl(query))
+        override val url: String get() = if (NewsEngine.bing) BingNews.searchUrl(query) else GoogleNews.searchUrl(query)
+        override val urls: List<String>
+            get() = if (NewsEngine.bing) listOf(BingNews.searchUrl(query))
+            else listOf(GoogleNews.searchUrl(query), BingNews.searchUrl(query))
     }
 
     data class Rss(val feedUrl: String) : FeedSource {
@@ -240,6 +243,12 @@ object GoogleNews {
         }
         return fromJson ?: Regex("""garturlres\\",\\"(https?://[^\\"]+)""").find(body)?.groupValues?.get(1)
     }
+}
+
+/** Какой поисковик даёт темы и поиск ленты: Bing (работает без VPN) или Google. */
+object NewsEngine {
+    @Volatile
+    var bing: Boolean = true
 }
 
 /** Поиск новостей Bing: даёт ленту с картинками и прямыми ссылками на статьи. */

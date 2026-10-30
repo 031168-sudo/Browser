@@ -271,6 +271,21 @@ private fun timeAgo(millis: Long): String {
 /** Раздел настроек ленты: темы, свои темы, свои сайты, скрытые ресурсы. */
 @Composable
 fun FeedSettingsSection(feed: FeedViewModel, onOpenInterests: () -> Unit) {
+    SectionTitle("Откуда брать новости")
+    listOf(true to "Bing — работает без VPN", false to "Google — нужен VPN").forEach { (bing, label) ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable { feed.setEngine(bing) },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.material3.RadioButton(selected = feed.useBing == bing, onClick = { feed.setEngine(bing) })
+            Text(label)
+        }
+    }
+    Hint("Издания из списка ниже от этого не зависят.")
+
+    Spacer(Modifier.height(12.dp))
     SectionTitle("Темы ленты")
     NewsTopic.entries.forEach { topic ->
         Row(

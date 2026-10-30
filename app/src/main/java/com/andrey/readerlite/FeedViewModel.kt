@@ -90,6 +90,17 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
     /** Прокрутка ленты живёт здесь, а не в экране: так она не сбрасывается при смене вкладки. */
     val listState: LazyListState
 
+    /** Темы и поиск — через Bing (по умолчанию) или Google. */
+    var useBing: Boolean by mutableStateOf(store.getBoolean(KEY_ENGINE_BING, true).also { NewsEngine.bing = it })
+        private set
+
+    fun setEngine(bing: Boolean) {
+        useBing = bing
+        NewsEngine.bing = bing
+        store.edit().putBoolean(KEY_ENGINE_BING, bing).apply()
+        refresh()
+    }
+
     init {
         // Сначала показываем ленту, сохранённую в прошлый раз, и возвращаемся
         // к той новости, на которой остановился. Потом тихо подгружаем свежие:
@@ -353,6 +364,7 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         private const val KEY_RSS = "rss"
         private const val KEY_BLOCKED = "blocked"
         private const val KEY_SELECTED = "selected"
+        private const val KEY_ENGINE_BING = "engine_bing"
         private const val KEY_SAVED_LINKS = "saved_links"
         const val FOR_YOU = "foryou"
         private const val KEY_ANCHOR = "anchor"
