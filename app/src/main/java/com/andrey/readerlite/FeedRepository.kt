@@ -49,10 +49,21 @@ sealed interface FeedSource {
     /** Откуда грузить. У своих тем два поисковика: если один не пустит, сработает другой. */
     val urls: List<String> get() = listOf(url)
 
+    /** Запасной адрес, если основной не ответил (Google Новости недоступны без VPN). */
+    val fallbackUrl: String? get() = null
+
     data class Topic(val topic: NewsTopic) : FeedSource {
         override val key = "t:" + topic.name
         override val label = topic.label
         override val url = GoogleNews.topicUrl(topic)
+        override val fallbackUrl = BingNews.searchUrl(
+            when (topic) {
+                NewsTopic.TOP -> "главные новости"
+                NewsTopic.NATION -> "новости России"
+                NewsTopic.WORLD -> "новости мира"
+                else -> topic.label
+            }
+        )
     }
 
     data class Query(val query: String) : FeedSource {

@@ -163,6 +163,11 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
                         val loaded = try {
                             FeedLoader.load(url)
                         } catch (e: Exception) {
+                            // Google не ответил — пробуем запасной источник (Bing).
+                            val fallback = src.fallbackUrl?.let { fb ->
+                                runCatching { FeedLoader.load(fb) }.getOrNull()?.takeIf { it.isNotEmpty() }
+                            }
+                            if (fallback != null) return@async fallback.map { it.copy(topic = topicOf(src)) }
                             val where = when {
                                 GoogleNews.isGoogleLink(url) -> "Google"
                                 BingNews.isBing(url) -> "Bing"
@@ -175,12 +180,7 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
                         // чтобы скрытие ресурса работало одинаково.
                         val presetName = (src as? FeedSource.Rss)?.let { RssCatalog.nameFor(it.feedUrl) }
                         // Запоминаем рубрику: по ней тоже учитываются интересы.
-                        val topic = when (src) {
-                            is FeedSource.Topic -> if (src.topic == NewsTopic.TOP) "" else src.label
-                            is FeedSource.Rss -> RssCatalog.categoryFor(src.feedUrl)
-                            is FeedSource.Query -> ""
-                        }
-                        loaded.map { it.copy(source = presetName ?: it.source, topic = topic) }
+                        loaded.map { it.copy(source = presetName ?: it.source, topic = topicOf(src)) }
                     }
                 }.awaitAll()
             }
@@ -336,6 +336,13 @@ class FeedViewModel(app: Application) : AndroidViewModel(app) {
         }
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /** Рубрика источника — по ней учитываются интересы. */
+    private fun topicOf(src: FeedSource): String = when (src) {
+        is FeedSource.Topic -> if (src.topic == NewsTopic.TOP) "" else src.label
+        is FeedSource.Rss -> RssCatalog.categoryFor(src.feedUrl)
+        is FeedSource.Query -> ""
     }
 
     private fun normalizeTitle(t: String) = t.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), "")
